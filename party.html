@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Party Ledger</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Serif+Text:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+  <div class="page-shell page-shell--with-fab">
+    <nav class="back-nav">
+      <a href="index.html" class="back-nav__link">
+        <span>←</span> <span>All Parties</span>
+      </a>
+    </nav>
+
+    <div class="page-content">
+      <!-- Party Name as Title -->
+      <h1 class="party-title" id="party-title"></h1>
+
+      <!-- Balance Summary -->
+      <div id="balance-summary" class="balance-summary" style="display: none;">
+        <div class="balance-summary__label">Current Balance</div>
+        <div id="current-balance" class="balance-summary__amount"></div>
+        <div id="balance-label" style="font-size: 0.9rem; color: var(--color-ink-muted); margin-top: var(--space-xs);"></div>
+        
+        <div style="display: flex; gap: var(--space-md); justify-content: center; margin-top: var(--space-lg); font-size: 0.875rem;">
+          <div>
+            <div style="color: var(--color-ink-muted);">Total Jama</div>
+            <div id="total-jama" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-jama);"></div>
+          </div>
+          <div>
+            <div style="color: var(--color-ink-muted);">Total Udhar</div>
+            <div id="total-udhar" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-udhar);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Balance Ribbon -->
+      <div id="balance-ribbon" class="balance-ribbon"></div>
+
+      <!-- Transactions Section -->
+      <div style="margin-bottom: var(--space-lg);">
+        <h2 style="font-family: var(--font-display); font-size: 1.125rem; margin-bottom: var(--space-md); color: var(--color-ink-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 400;">Transactions</h2>
+        <div id="transactions-list" class="card-list"></div>
+
+        <div id="empty-transactions" class="empty-state" style="display: none;">
+          <p>No entries yet. Add one above or scan a diary page.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB Bar with Add buttons -->
+  <div class="fab-bar">
+    <div class="fab-bar__inner" style="gap: var(--space-md);">
+      <button class="btn btn--secondary" id="btn-add-udhar">+ Add Udhar</button>
+      <button class="btn btn--primary" id="btn-add-jama">+ Add Jama</button>
+    </div>
+  </div>
+
+  <!-- Modal for Adding Jama -->
+  <div id="modal-add-jama" class="modal-overlay" hidden>
+    <div class="card modal">
+      <h2 class="modal__title">Add Jama</h2>
+      <form id="form-add-jama">
+        <div class="form-group">
+          <label for="jama-amount" class="form-label">Amount</label>
+          <input
+            type="number"
+            id="jama-amount"
+            class="form-input form-input--amount"
+            placeholder="0"
+            min="0"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="jama-date" class="form-label">Date</label>
+          <input
+            type="date"
+            id="jama-date"
+            class="form-input"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="jama-note" class="form-label">Note (optional)</label>
+          <input
+            type="text"
+            id="jama-note"
+            class="form-input"
+            placeholder="e.g., Cash payment"
+          />
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" id="btn-cancel-jama">Cancel</button>
+          <button type="submit" class="btn btn--primary">Add Jama</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal for Adding Udhar -->
+  <div id="modal-add-udhar" class="modal-overlay" hidden>
+    <div class="card modal">
+      <h2 class="modal__title">Add Udhar</h2>
+      <form id="form-add-udhar">
+        <div class="form-group">
+          <label for="udhar-amount" class="form-label">Amount</label>
+          <input
+            type="number"
+            id="udhar-amount"
+            class="form-input form-input--amount"
+            placeholder="0"
+            min="0"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="udhar-date" class="form-label">Date</label>
+          <input
+            type="date"
+            id="udhar-date"
+            class="form-input"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="udhar-note" class="form-label">Note (optional)</label>
+          <input
+            type="text"
+            id="udhar-note"
+            class="form-input"
+            placeholder="e.g., Cement bags"
+          />
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" id="btn-cancel-udhar">Cancel</button>
+          <button type="submit" class="btn btn--primary">Add Udhar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let db;
+    let partyId;
+    let party;
+    let transactions = [];
+
+    // Initialize
+    async function init() {
+      try {
+        partyId = getParam('id');
+        if (!partyId) {
+          showError('Invalid party ID');
+          return;
+        }
+
+        db = initSupabase();
+        await loadPartyData();
+        setupEventListeners();
+      } catch (err) {
+        showError('Failed to initialize: ' + err.message);
+      }
+    }
+
+    // Load party and transactions
+    async function loadPartyData() {
+      try {
+        showLoading('Loading party…');
+        party = await getParty(db, partyId);
+        transactions = await getTransactions(db, partyId);
+        const derivedBalance = (transactions || []).reduce((acc, t) => {
+          return t.type === 'udhar' ? acc + (t.amount || 0) : acc - (t.amount || 0);
+        }, 0);
+        party = { ...party, current_balance: derivedBalance };
+        hideLoading();
+        renderPartyView();
+      } catch (err) {
+        hideLoading();
+        showError('Failed to load party: ' + err.message);
+      }
+    }
+
+    // Render party view
+    function renderPartyView() {
+      // Set title
+      document.getElementById('party-title').textContent = party.name;
+      document.title = party.name + ' - Udhar Ledger';
+
+      // Render balance summary
+      renderBalanceSummary();
+
+      // Render balance ribbon
+      renderBalanceRibbon();
+
+      // Render transactions list
+      renderTransactionsList();
+    }
+
+    // Render balance summary
+    function renderBalanceSummary() {
+      const totalJama = transactions
+        .filter(t => t.type === 'jama')
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+      const totalUdhar = transactions
+        .filter(t => t.type === 'udhar')
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+      const derivedBalance = totalUdhar - totalJama;
+      const balance = typeof party.current_balance === 'number' ? party.current_balance : derivedBalance;
+      const balanceClass = balance > 0 ? 'balance-summary__amount--positive' :
+                           balance < 0 ? 'balance-summary__amount--negative' :
+                           'balance-summary__amount--zero';
+      const balanceLabel = balance > 0 ? '(They owe us)' :
+                           balance < 0 ? '(We owe them)' :
+                           '(Settled)';
+
+      document.getElementById('current-balance').textContent = formatCurrency(balance);
+      document.getElementById('current-balance').className = `balance-summary__amount ${balanceClass}`;
+      document.getElementById('balance-label').textContent = balanceLabel;
+      document.getElementById('total-jama').textContent = formatCurrency(totalJama);
+      document.getElementById('total-udhar').textContent = formatCurrency(totalUdhar);
+      document.getElementById('balance-summary').style.display = 'block';
+    }
+
+    // Render balance ribbon (SVG visualization)
+    function renderBalanceRibbon() {
+      if (transactions.length === 0) {
+        document.getElementById('balance-ribbon').innerHTML = '';
+        return;
+      }
+
+      // Get CSS color values
+      const root = document.documentElement;
+      const jamaColor = getComputedStyle(root).getPropertyValue('--color-jama').trim();
+      const udharColor = getComputedStyle(root).getPropertyValue('--color-udhar').trim();
+
+      // Sort transactions by date (oldest first) for ribbon
+      const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // Calculate max amount for scaling
+      const maxAmount = Math.max(...sorted.map(t => t.amount), 1);
+      const centerY = 24;
+      const maxHeight = 20;
+      const barWidth = 3;
+      const spacing = 2;
+      const totalWidth = (barWidth + spacing) * sorted.length;
+
+      // Create SVG
+      let svg = '<svg viewBox="0 0 ' + totalWidth + ' 48" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width: 100%; height: 100%;">';
+
+      // Center line
+      svg += `<line x1="0" y1="${centerY}" x2="${totalWidth}" y2="${centerY}" stroke="currentColor" opacity="0.1" stroke-width="1" stroke-dasharray="2,2" />`;
+
+      // Bars
+      sorted.forEach((txn, idx) => {
+        const x = idx * (barWidth + spacing);
+        const height = (txn.amount / maxAmount) * maxHeight;
+        const color = txn.type === 'jama' ? jamaColor : udharColor;
+
+        if (txn.type === 'jama') {
+          // Jama bars go up
+          svg += `<rect x="${x}" y="${centerY - height}" width="${barWidth}" height="${height}" fill="${color}" rx="1" />`;
+        } else {
+          // Udhar bars go down
+          svg += `<rect x="${x}" y="${centerY}" width="${barWidth}" height="${height}" fill="${color}" rx="1" />`;
+        }
+      });
+
+      svg += '</svg>';
+      document.getElementById('balance-ribbon').innerHTML = svg;
+    }
+
+    // Render transactions list
+    function renderTransactionsList() {
+      const listEl = document.getElementById('transactions-list');
+      const emptyEl = document.getElementById('empty-transactions');
+
+      listEl.innerHTML = '';
+
+      if (transactions.length === 0) {
+        listEl.hidden = true;
+        emptyEl.hidden = false;
+      } else {
+        listEl.hidden = false;
+        emptyEl.hidden = true;
+
+        transactions.forEach(txn => {
+          const card = createTransactionCard(txn);
+          listEl.appendChild(card);
+        });
+      }
+    }
+
+    // Create transaction card element
+    function createTransactionCard(txn) {
+      const card = document.createElement('div');
+      card.className = `card txn-card txn-card--${txn.type}`;
+
+      const amount = formatCurrency(txn.amount);
+      const date = formatDate(txn.date);
+
+      card.innerHTML = `
+        <div class="txn-card__row">
+          <div class="txn-card__type">${txn.type.toUpperCase()}</div>
+          <div class="txn-card__amount">${amount}</div>
+        </div>
+        <div class="txn-card__date">${date}</div>
+        ${txn.note ? `<div class="txn-card__note">${txn.note}</div>` : ''}
+      `;
+
+      return card;
+    }
+
+    // Setup event listeners
+    function setupEventListeners() {
+      // Add jama button
+      document.getElementById('btn-add-jama').addEventListener('click', () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('jama-date').value = today;
+        document.getElementById('modal-add-jama').hidden = false;
+        document.getElementById('jama-amount').focus();
+      });
+
+      // Cancel add jama modal
+      document.getElementById('btn-cancel-jama').addEventListener('click', () => {
+        document.getElementById('modal-add-jama').hidden = true;
+        document.getElementById('form-add-jama').reset();
+      });
+
+      // Add jama form submit
+      document.getElementById('form-add-jama').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const amount = parseFloat(document.getElementById('jama-amount').value);
+        const date = document.getElementById('jama-date').value;
+        const note = document.getElementById('jama-note').value.trim();
+
+        if (amount <= 0) {
+          showError('Amount must be greater than 0');
+          return;
+        }
+
+        try {
+          showLoading('Adding transaction…');
+          await addTransaction(db, partyId, 'jama', amount, date, note || null, 'manual');
+          hideLoading();
+          document.getElementById('modal-add-jama').hidden = true;
+          document.getElementById('form-add-jama').reset();
+          await loadPartyData();
+        } catch (err) {
+          hideLoading();
+          showError('Failed to add transaction: ' + err.message);
+        }
+      });
+
+      // Add udhar button
+      document.getElementById('btn-add-udhar').addEventListener('click', () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('udhar-date').value = today;
+        document.getElementById('modal-add-udhar').hidden = false;
+        document.getElementById('udhar-amount').focus();
+      });
+
+      // Cancel add udhar modal
+      document.getElementById('btn-cancel-udhar').addEventListener('click', () => {
+        document.getElementById('modal-add-udhar').hidden = true;
+        document.getElementById('form-add-udhar').reset();
+      });
+
+      // Add udhar form submit
+      document.getElementById('form-add-udhar').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const amount = parseFloat(document.getElementById('udhar-amount').value);
+        const date = document.getElementById('udhar-date').value;
+        const note = document.getElementById('udhar-note').value.trim();
+
+        if (amount <= 0) {
+          showError('Amount must be greater than 0');
+          return;
+        }
+
+        try {
+          showLoading('Adding transaction…');
+          await addTransaction(db, partyId, 'udhar', amount, date, note || null, 'manual');
+          hideLoading();
+          document.getElementById('modal-add-udhar').hidden = true;
+          document.getElementById('form-add-udhar').reset();
+          await loadPartyData();
+        } catch (err) {
+          hideLoading();
+          showError('Failed to add transaction: ' + err.message);
+        }
+      });
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+function initSupabase() {
+  // If using placeholder config, use demo mode with localStorage
+  if (CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_ANON_KEY.includes('your-anon')) {
+    return createDemoDb();
+  }
+  
+  if (typeof supabase === 'undefined') {
+    throw new Error('Supabase CDN script must be loaded before supabase.js');
+  }
+  return supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+}
+
+// Demo database using localStorage
+function createDemoDb() {
+  const demoDb = {
+    from: function(table) {
+      const getTableData = () => getDemoData(table) || [];
+      const saveTableData = (data) => saveDemoData(table, data);
+
+      const createSelectChain = (rows) => {
+        const chain = {
+          eq: function(col, val) {
+            const filtered = rows.filter((d) => d[col] === val);
+            return createSelectChain(filtered);
+          },
+          ilike: function(col, val) {
+            const query = String(val || '').toLowerCase();
+            const filtered = rows.filter((d) => String(d[col] || '').toLowerCase().includes(query));
+            return createSelectChain(filtered);
+          },
+          order: function(col, opts) {
+            return Promise.resolve().then(() => {
+              const sorted = [...rows].sort((a, b) => {
+                const aVal = a[col], bVal = b[col];
+                if (opts?.ascending) return aVal > bVal ? 1 : -1;
+                return aVal < bVal ? 1 : -1;
+              });
+              return { data: sorted, error: null };
+            });
+          },
+          maybeSingle: function() {
+            return Promise.resolve().then(() => ({
+              data: rows[0] || null,
+              error: null
+            }));
+          },
+          single: function() {
+            return Promise.resolve().then(() => ({
+              data: rows[0] || null,
+              error: null
+            }));
+          },
+          then: function(resolve, reject) {
+            return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+          },
+          catch: function(reject) {
+            return Promise.resolve({ data: rows, error: null }).catch(reject);
+          },
+          finally: function(callback) {
+            return Promise.resolve({ data: rows, error: null }).finally(callback);
+          }
+        };
+
+        return chain;
+      };
+
+      const methods = {
+        select: function(cols) {
+          return createSelectChain(getTableData());
+        },
+        eq: function(col, val) {
+          return createSelectChain(getTableData().filter((d) => d[col] === val));
+        },
+        ilike: function(col, val) {
+          const query = String(val || '').toLowerCase();
+          return createSelectChain(getTableData().filter((d) => String(d[col] || '').toLowerCase().includes(query)));
+        },
+        insert: function(obj) {
+          const newObj = {
+            ...obj,
+            id: 'demo-' + Math.random().toString(36).substr(2, 9),
+            created_at: new Date().toISOString()
+          };
+          const data = getTableData();
+          data.push(newObj);
+          saveTableData(data);
+
+          return {
+            data: newObj,
+            error: null,
+            select: function(cols) {
+              return {
+                single: function() {
+                  return Promise.resolve().then(() => ({
+                    data: newObj,
+                    error: null
+                  }));
+                }
+              };
+            }
+          };
+        },
+        update: function(obj) {
+          return {
+            eq: function(col, val) {
+              return Promise.resolve().then(() => {
+                const data = getTableData();
+                const idx = data.findIndex((d) => d[col] === val);
+                if (idx >= 0) data[idx] = { ...data[idx], ...obj };
+                saveTableData(data);
+                return { error: null };
+              });
+            }
+          };
+        }
+      };
+      return methods;
+    },
+    channel: function(name) {
+      return {
+        on: function() { return this; },
+        subscribe: function() { return this; }
+      };
+    }
+  };
+  return demoDb;
+}
+
+function getDemoData(table) {
+  const stored = localStorage.getItem(`demo_${table}`);
+  return stored ? JSON.parse(stored) : [];
+}
+
+function saveDemoData(table, data) {
+  localStorage.setItem(`demo_${table}`, JSON.stringify(data));
+}
+
+async function getAllParties(db) {
+  const { data, error } = await db
+    .from('parties')
+    .select('*')
+    .order('last_activity', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+async function getParty(db, id) {
+  const { data, error } = await db
+    .from('parties')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function getTransactions(db, partyId) {
+  const { data, error } = await db
+    .from('transactions')
+    .select('*')
+    .eq('party_id', partyId)
+    .order('date', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+async function addParty(db, name, phone) {
+  const { data, error } = await db
+    .from('parties')
+    .insert({ name, phone: phone || null })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function addTransaction(db, partyId, type, amount, date, note, source) {
+  const { error } = await db
+    .from('transactions')
+    .insert({
+      party_id: partyId,
+      type,
+      amount,
+      date,
+      note: note || null,
+      source: source || 'manual'
+    });
+
+  if (error) throw error;
+  return recalculateBalance(db, partyId);
+}
+
+async function recalculateBalance(db, partyId) {
+  const { data: txns, error: fetchError } = await db
+    .from('transactions')
+    .select('type, amount')
+    .eq('party_id', partyId);
+
+  if (fetchError) throw fetchError;
+
+  const balance = (txns || []).reduce(
+    (acc, t) => (t.type === 'udhar' ? acc + t.amount : acc - t.amount),
+    0
+  );
+
+  const { error: updateError } = await db
+    .from('parties')
+    .update({
+      current_balance: balance,
+      last_activity: new Date().toISOString()
+    })
+    .eq('id', partyId);
+
+  if (updateError) throw updateError;
+  return balance;
+}
+
+async function searchPartyByName(db, name) {
+  const { data, error } = await db
+    .from('parties')
+    .select('*')
+    .ilike('name', name)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+function subscribeToParties(db, callback) {
+  return db
+    .channel('parties-changes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'parties' },
+      callback
+    )
+    .subscribe();
+}

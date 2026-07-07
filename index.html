@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Udhar Ledger</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Serif+Text:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__title">Udhar Ledger</div>
+    <button class="btn btn--primary app-header__action" id="btn-add-party">+ Add</button>
+  </header>
+
+  <div class="page-shell">
+    <div class="page-content">
+      <!-- Search + Balance Filter -->
+      <div class="form-group" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+        <div style="flex: 1 1 220px;">
+          <label for="search-parties" class="form-label" style="margin-bottom:0.25rem; display:block;">Search</label>
+          <input
+            type="text"
+            id="search-parties"
+          class="form-input"
+          placeholder="🔍 Search parties..."
+          aria-label="Search parties by name"
+          style="flex:1 1 220px;"
+        />
+        <div style="max-width: 180px;">
+          <label for="balance-filter" class="form-label" style="margin-bottom:0.25rem; display:block;">Balance</label>
+          <select
+            id="balance-filter"
+            class="form-input"
+            aria-label="Filter parties by balance"
+            style="width: 100%;"
+          >
+            <option value="all">All balances</option>
+            <option value="positive">They owe us</option>
+            <option value="negative">We owe them</option>
+            <option value="settled">Settled</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Party Cards List -->
+      <div id="parties-list" class="card-list"></div>
+
+      <!-- Empty States -->
+      <div id="empty-no-parties" class="empty-state" style="display: none;">
+        <p>No parties yet. Tap + Add to get started.</p>
+      </div>
+
+      <div id="empty-no-search" class="empty-state" style="display: none;">
+        <p id="empty-search-message">No match for '[query]'.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB Bar (Floating Action Button) -->
+  <div class="fab-bar">
+    <div class="fab-bar__inner">
+      <button class="btn btn--fab btn--primary" id="btn-scan-diary" title="Scan Diary Page">📷</button>
+    </div>
+  </div>
+
+  <!-- Modal for Adding Party -->
+  <div id="modal-add-party" class="modal-overlay" hidden>
+    <div class="card modal">
+      <h2 class="modal__title">Add Party</h2>
+      <form id="form-add-party">
+        <div class="form-group">
+          <label for="input-party-name" class="form-label">Name</label>
+          <input
+            type="text"
+            id="input-party-name"
+            class="form-input"
+            placeholder="e.g., Ramesh Traders"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="input-party-phone" class="form-label">Phone (optional)</label>
+          <input
+            type="tel"
+            id="input-party-phone"
+            class="form-input"
+            placeholder="e.g., 9876543210"
+          />
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn btn--secondary" id="btn-cancel-add-party">Cancel</button>
+          <button type="submit" class="btn btn--primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let db;
+    let allParties = [];
+    let subscription;
+    let currentSearchQuery = '';
+    let currentBalanceFilter = 'all';
+
+    // Initialize
+    async function init() {
+      try {
+        db = initSupabase();
+        await loadParties();
+        setupEventListeners();
+        setupRealtimeSubscription();
+      } catch (err) {
+        showError('Failed to initialize: ' + err.message);
+      }
+    }
+
+    // Load parties from database
+    async function loadParties() {
+      try {
+        showLoading('Loading parties…');
+        allParties = await getAllParties(db);
+        allParties = await Promise.all(allParties.map(async (party) => {
+          try {
+            const txns = await getTransactions(db, party.id);
+            const derivedBalance = (txns || []).reduce((acc, t) => {
+              return t.type === 'udhar' ? acc + (t.amount || 0) : acc - (t.amount || 0);
+            }, 0);
+            return { ...party, current_balance: derivedBalance };
+          } catch {
+            return party;
+          }
+        }));
+        hideLoading();
+        renderParties();
+      } catch (err) {
+        hideLoading();
+        showError('Failed to load parties: ' + err.message);
+      }
+    }
+
+    // Render party cards
+    function renderParties() {
+      const listEl = document.getElementById('parties-list');
+      const emptyNoPartiesEl = document.getElementById('empty-no-parties');
+      const emptyNoSearchEl = document.getElementById('empty-no-search');
+
+      let filtered = allParties;
+
+      if (currentSearchQuery.trim()) {
+        const lowerQuery = currentSearchQuery.toLowerCase();
+        filtered = filtered.filter(p => p.name.toLowerCase().includes(lowerQuery));
+      }
+
+      filtered = filtered.filter(party => {
+        const balance = party.current_balance || 0;
+        if (currentBalanceFilter === 'positive') return balance > 0;
+        if (currentBalanceFilter === 'negative') return balance < 0;
+        if (currentBalanceFilter === 'settled') return balance === 0;
+        return true;
+      });
+
+      listEl.innerHTML = '';
+
+      if (filtered.length === 0) {
+        if (currentSearchQuery.trim() || currentBalanceFilter !== 'all') {
+          emptyNoPartiesEl.hidden = true;
+          emptyNoSearchEl.hidden = false;
+          const label = currentBalanceFilter === 'all' ? currentSearchQuery : `${currentSearchQuery || 'No'} ${currentBalanceFilter}`;
+          document.getElementById('empty-search-message').textContent = `No match for '${label}'.`;
+        } else {
+          emptyNoPartiesEl.hidden = false;
+          emptyNoSearchEl.hidden = true;
+        }
+      } else {
+        emptyNoPartiesEl.hidden = true;
+        emptyNoSearchEl.hidden = true;
+
+        filtered.forEach(party => {
+          const card = createPartyCard(party);
+          listEl.appendChild(card);
+        });
+      }
+    }
+
+    // Create party card element
+    function createPartyCard(party) {
+      const card = document.createElement('div');
+      card.className = 'card party-card';
+      card.style.cursor = 'pointer';
+
+      const balance = party.current_balance || 0;
+      const balanceClass = balance > 0 ? 'party-card__balance--positive' :
+                           balance < 0 ? 'party-card__balance--negative' :
+                           'party-card__balance--zero';
+      const balanceLabel = balance > 0 ? '(They owe us)' :
+                           balance < 0 ? '(We owe them)' :
+                           '(Settled)';
+
+      // Format last_activity or show "Never"
+      let lastActivityText = 'Never';
+      if (party.last_activity) {
+        const lastDate = new Date(party.last_activity).toISOString().split('T')[0];
+        lastActivityText = 'Last: Updated · ' + formatRelativeDate(lastDate);
+      }
+
+      card.innerHTML = `
+        <div class="party-card__info">
+          <div class="party-card__name">${party.name}</div>
+          <div class="party-card__meta">${lastActivityText}</div>
+        </div>
+        <div class="party-card__balance ${balanceClass}">
+          ${formatCurrency(balance)}
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        window.location.href = `party.html?id=${party.id}`;
+      });
+
+      return card;
+    }
+
+    // Setup event listeners
+    function setupEventListeners() {
+      // Add party button
+      document.getElementById('btn-add-party').addEventListener('click', () => {
+        document.getElementById('modal-add-party').hidden = false;
+        document.getElementById('input-party-name').focus();
+      });
+
+      // Cancel add party modal
+      document.getElementById('btn-cancel-add-party').addEventListener('click', () => {
+        document.getElementById('modal-add-party').hidden = true;
+        document.getElementById('form-add-party').reset();
+      });
+
+      // Add party form submit
+      document.getElementById('form-add-party').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('input-party-name').value.trim();
+        const phone = document.getElementById('input-party-phone').value.trim();
+
+        if (!name) {
+          showError('Party name is required');
+          return;
+        }
+
+        try {
+          showLoading('Adding party…');
+          await addParty(db, name, phone || null);
+          hideLoading();
+          document.getElementById('modal-add-party').hidden = true;
+          document.getElementById('form-add-party').reset();
+          await loadParties();
+        } catch (err) {
+          hideLoading();
+          showError('Failed to add party: ' + err.message);
+        }
+      });
+
+      // Search input
+      document.getElementById('search-parties').addEventListener('input', (e) => {
+        currentSearchQuery = e.target.value;
+        renderParties();
+      });
+
+      document.getElementById('balance-filter').addEventListener('change', (e) => {
+        currentBalanceFilter = e.target.value;
+        renderParties();
+      });
+
+      // Scan diary button
+      document.getElementById('btn-scan-diary').addEventListener('click', () => {
+        window.location.href = 'scan.html';
+      });
+    }
+
+    // Setup real-time subscription
+    function setupRealtimeSubscription() {
+      subscription = subscribeToParties(db, () => {
+        loadParties();
+      });
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

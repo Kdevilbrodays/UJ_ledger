@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan Diary — Udhar Ledger</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Serif+Text:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <style>
+    .scan-page {
+      animation: fadeUp 0.3s ease;
+    }
+
+    .scan-page__header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      margin-bottom: var(--space-lg);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .scan-page__back {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5rem;
+      color: var(--color-ink);
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+    }
+
+    .scan-page__title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      flex: 1;
+    }
+
+    /* Image Upload Section */
+    .upload-section {
+      margin-bottom: var(--space-lg);
+    }
+
+    .upload-box {
+      background: var(--color-bg);
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+      text-align: center;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .upload-box:hover {
+      border-color: var(--color-accent);
+      background: rgba(217, 119, 87, 0.02);
+    }
+
+    .upload-box__input {
+      display: none;
+    }
+
+    .upload-box__label {
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .upload-box__icon {
+      font-size: 2.5rem;
+    }
+
+    .upload-box__text {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      color: var(--color-ink);
+    }
+
+    .upload-box__subtext {
+      font-size: 0.8125rem;
+      color: var(--color-ink-muted);
+      margin-top: var(--space-xs);
+    }
+
+    /* Image Preview */
+    .image-preview {
+      margin-bottom: var(--space-lg);
+      display: none;
+    }
+
+    .image-preview.active {
+      display: block;
+    }
+
+    .image-preview__image {
+      width: 100%;
+      max-height: 400px;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+
+    .image-preview__actions {
+      display: flex;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .image-preview__actions .btn {
+      flex: 1;
+    }
+
+    /* Scan Button */
+    .scan-button-wrapper {
+      margin-bottom: var(--space-lg);
+      display: none;
+    }
+
+    .scan-button-wrapper.active {
+      display: block;
+    }
+
+    .scan-button-wrapper .btn {
+      width: 100%;
+    }
+
+    /* Review Panel */
+    .review-panel {
+      display: none;
+      margin-top: var(--space-lg);
+    }
+
+    .review-panel.active {
+      display: block;
+    }
+
+    .review-panel__header {
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .review-date {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      color: var(--color-ink-muted);
+      margin-bottom: var(--space-sm);
+    }
+
+    .review-date strong {
+      font-weight: 600;
+      color: var(--color-ink);
+    }
+
+    .review-section {
+      margin-bottom: var(--space-lg);
+    }
+
+    .review-section__title {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      margin-bottom: var(--space-md);
+      padding-left: var(--space-sm);
+      border-left: 3px solid var(--color-border);
+    }
+
+    .review-section__title.jama {
+      border-left-color: var(--color-jama);
+    }
+
+    .review-section__title.udhar {
+      border-left-color: var(--color-udhar);
+    }
+
+    .entry-row {
+      display: flex;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-sm);
+      align-items: flex-end;
+    }
+
+    .entry-row__name {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+
+    .entry-row__amount {
+      width: 100px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+
+    .entry-row__delete {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.15s ease;
+    }
+
+    .entry-row__delete:hover {
+      background: var(--color-bg);
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .form-label {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-ink-muted);
+    }
+
+    .form-input {
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      color: var(--color-ink);
+      transition: 0.15s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
+    }
+
+    .form-input--amount {
+      font-family: var(--font-mono);
+      text-align: right;
+    }
+
+    .entry-error {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: #d97757;
+      margin-top: 2px;
+    }
+
+    /* Ambiguous Section */
+    .ambiguous-section {
+      margin-bottom: var(--space-lg);
+      padding: var(--space-md);
+      background: var(--color-accent-dim);
+      border-left: 3px solid var(--color-accent);
+      border-radius: var(--radius-sm);
+    }
+
+    .ambiguous-section__title {
+      font-family: var(--font-display);
+      font-size: 0.9375rem;
+      margin-bottom: var(--space-md);
+      color: var(--color-ink);
+    }
+
+    .ambiguous-entry {
+      display: flex;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-sm);
+      align-items: flex-end;
+    }
+
+    .ambiguous-entry__info {
+      flex: 1;
+      display: flex;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .ambiguous-entry__name {
+      font-family: var(--font-display);
+      font-size: 0.9375rem;
+      color: var(--color-ink);
+    }
+
+    .ambiguous-entry__amount {
+      font-family: var(--font-mono);
+      color: var(--color-ink-muted);
+    }
+
+    .ambiguous-entry__buttons {
+      display: flex;
+      gap: var(--space-xs);
+    }
+
+    .ambiguous-btn {
+      padding: 6px 12px;
+      font-size: 0.8125rem;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      background: var(--color-surface);
+      color: var(--color-ink);
+      transition: 0.15s ease;
+      font-family: var(--font-ui);
+      font-weight: 500;
+    }
+
+    .ambiguous-btn:hover {
+      background: var(--color-bg);
+    }
+
+    .ambiguous-btn--jama {
+      border-color: var(--color-jama);
+      color: var(--color-jama);
+    }
+
+    .ambiguous-btn--jama.active {
+      background: var(--color-jama);
+      color: white;
+    }
+
+    .ambiguous-btn--udhar {
+      border-color: var(--color-udhar);
+      color: var(--color-udhar);
+    }
+
+    .ambiguous-btn--udhar.active {
+      background: var(--color-udhar);
+      color: white;
+    }
+
+    /* Add Row Button */
+    .add-row-btn {
+      padding: 10px 16px;
+      font-size: 0.9375rem;
+      background: transparent;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--color-ink-muted);
+      transition: 0.15s ease;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      margin-bottom: var(--space-md);
+    }
+
+    .add-row-btn:hover {
+      background: var(--color-bg);
+      color: var(--color-ink);
+    }
+
+    /* Save Section */
+    .save-section {
+      display: none;
+      margin-top: var(--space-lg);
+      padding-top: var(--space-lg);
+      border-top: 1px solid var(--color-border);
+    }
+
+    .save-section.active {
+      display: block;
+    }
+
+    .save-section .btn {
+      width: 100%;
+    }
+
+    /* Message/Status */
+    .banner {
+      padding: var(--space-md);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-md);
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+    }
+
+    .banner--error {
+      background: #fee;
+      color: #d97757;
+      border: 1px solid #fdd;
+    }
+
+    .banner--info {
+      background: var(--color-jama-dim);
+      color: var(--color-jama);
+      border: 1px solid #ddeaf7;
+    }
+
+    .loading-state {
+      display: none;
+      text-align: center;
+      padding: var(--space-lg);
+    }
+
+    .loading-state.active {
+      display: block;
+    }
+
+    .shimmer {
+      height: 20px;
+      background: linear-gradient(90deg, #f0e0d8, #faf9f5, #f0e0d8);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s ease infinite;
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-md);
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .loading-text {
+      font-family: var(--font-ui);
+      color: var(--color-ink-muted);
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .scan-page {
+        padding: var(--space-md);
+      }
+
+      .entry-row {
+        flex-wrap: wrap;
+      }
+
+      .entry-row__amount {
+        width: 100%;
+      }
+
+      .upload-box {
+        padding: var(--space-md);
+      }
+
+      .upload-box__icon {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <button class="scan-page__back" id="btn-back" aria-label="Go back">←</button>
+    <div class="app-header__title">Scan Diary Page</div>
+  </header>
+
+  <div class="page-shell">
+    <div class="page-content scan-page">
+      <!-- Error Banner -->
+      <div id="error-banner" class="banner banner--error" hidden></div>
+
+      <!-- Upload Section -->
+      <div class="upload-section">
+        <div class="upload-box" id="upload-box">
+          <label class="upload-box__label">
+            <div class="upload-box__icon">📷</div>
+            <div class="upload-box__text">Take Photo / Choose from Gallery</div>
+            <div class="upload-box__subtext">Photograph your diary page clearly</div>
+            <input
+              type="file"
+              id="file-input"
+              class="upload-box__input"
+              accept="image/*"
+              capture="environment"
+            />
+          </label>
+        </div>
+      </div>
+
+      <!-- Image Preview -->
+      <div class="image-preview" id="image-preview">
+        <img id="preview-image" class="image-preview__image" />
+        <div class="image-preview__actions">
+          <button class="btn btn--primary" id="scan-button">Scan this page →</button>
+          <button class="btn btn--secondary" id="change-image-button">Change</button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div class="loading-state" id="loading-state">
+        <div class="shimmer"></div>
+        <p class="loading-text">Reading diary page…</p>
+      </div>
+
+      <!-- Review Panel -->
+      <div class="review-panel" id="review-panel">
+        <div class="review-panel__header">
+          <div class="review-date">📅 Recording for: <strong id="review-date-label"></strong></div>
+        </div>
+
+        <!-- JAMA Section -->
+        <div class="review-section">
+          <div class="review-section__title jama">JAMA (Left side of diary)</div>
+          <div id="jama-entries" class="review-section__content"></div>
+          <button class="add-row-btn" id="add-jama-btn">+ Add Jama row</button>
+        </div>
+
+        <!-- UDHAR Section -->
+        <div class="review-section">
+          <div class="review-section__title udhar">UDHAR (Right side of diary)</div>
+          <div id="udhar-entries" class="review-section__content"></div>
+          <button class="add-row-btn" id="add-udhar-btn">+ Add Udhar row</button>
+        </div>
+
+        <!-- Ambiguous Section (conditionally shown) -->
+        <div class="ambiguous-section" id="ambiguous-section" hidden>
+          <div class="ambiguous-section__title">⚠️ UNCLEAR — ASSIGN SIDE:</div>
+          <div id="ambiguous-entries" class="review-section__content"></div>
+        </div>
+
+        <!-- Save Section -->
+        <div class="save-section active">
+          <button class="btn btn--primary" id="save-button">Save All Entries</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+  <script src="gemini.js"></script>
+
+  <script>
+    let db;
+    let currentImageBase64 = null;
+    let currentImageMimeType = null;
+    let currentEntries = {
+      jama: [],
+      udhar: [],
+      ambiguous: []
+    };
+    let disambiguated = {}; // Track which ambiguous entries have been moved
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      db = initSupabase();
+
+      // Back button
+      document.getElementById('btn-back').addEventListener('click', () => {
+        window.location.href = 'index.html';
+      });
+
+      // File input
+      document.getElementById('file-input').addEventListener('change', handleFileSelect);
+      document.getElementById('upload-box').addEventListener('click', () => {
+        document.getElementById('file-input').click();
+      });
+
+      // Scan button
+      document.getElementById('scan-button').addEventListener('click', handleScan);
+
+      // Change image
+      document.getElementById('change-image-button').addEventListener('click', () => {
+        resetImageUpload();
+      });
+
+      // Add entry rows
+      document.getElementById('add-jama-btn').addEventListener('click', () => addEmptyRow('jama'));
+      document.getElementById('add-udhar-btn').addEventListener('click', () => addEmptyRow('udhar'));
+
+      // Save
+      document.getElementById('save-button').addEventListener('click', handleSave);
+
+      // Update review date
+      updateReviewDate();
+    });
+
+    function updateReviewDate() {
+      const today = new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+      document.getElementById('review-date-label').textContent = today;
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentImageBase64 = event.target.result.split(',')[1];
+        currentImageMimeType = file.type;
+
+        const previewUrl = event.target.result;
+        document.getElementById('preview-image').src = previewUrl;
+        document.getElementById('image-preview').classList.add('active');
+
+        hideError();
+        resetReview();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetImageUpload() {
+      currentImageBase64 = null;
+      currentImageMimeType = null;
+      document.getElementById('file-input').value = '';
+      document.getElementById('image-preview').classList.remove('active');
+      resetReview();
+    }
+
+    function resetReview() {
+      currentEntries = { jama: [], udhar: [], ambiguous: [] };
+      disambiguated = {};
+      document.getElementById('review-panel').classList.remove('active');
+      document.getElementById('loading-state').classList.remove('active');
+    }
+
+    async function handleScan() {
+      if (!currentImageBase64) {
+        showError('No image selected');
+        return;
+      }
+
+      document.getElementById('loading-state').classList.add('active');
+      hideError();
+
+      try {
+        const result = await scanDiaryPage(currentImageBase64, currentImageMimeType);
+
+        if (result.error) {
+          showError("This doesn't look like a ledger page. Try again with a clearer photo.");
+          document.getElementById('loading-state').classList.remove('active');
+          return;
+        }
+
+        currentEntries = result;
+
+        if (result.jama.length === 0 && result.udhar.length === 0 && result.ambiguous.length === 0) {
+          showError("Couldn't find any entries in this image. You can add them manually below.");
+        }
+
+        renderReviewPanel();
+        document.getElementById('review-panel').classList.add('active');
+        document.getElementById('loading-state').classList.remove('active');
+      } catch (error) {
+        console.error('Scan error:', error);
+        showError('Scan failed. Check your connection or try a clearer photo.');
+        document.getElementById('loading-state').classList.remove('active');
+      }
+    }
+
+    function renderReviewPanel() {
+      // Render Jama entries
+      const jamaContainer = document.getElementById('jama-entries');
+      jamaContainer.innerHTML = '';
+      currentEntries.jama.forEach((entry, idx) => {
+        jamaContainer.appendChild(createEntryRow('jama', idx, entry));
+      });
+
+      // Render Udhar entries
+      const udharContainer = document.getElementById('udhar-entries');
+      udharContainer.innerHTML = '';
+      currentEntries.udhar.forEach((entry, idx) => {
+        udharContainer.appendChild(createEntryRow('udhar', idx, entry));
+      });
+
+      // Render ambiguous entries (if any)
+      const ambiguousSection = document.getElementById('ambiguous-section');
+      const ambiguousContainer = document.getElementById('ambiguous-entries');
+
+      if (currentEntries.ambiguous.length > 0) {
+        ambiguousSection.hidden = false;
+        ambiguousContainer.innerHTML = '';
+        currentEntries.ambiguous.forEach((entry, idx) => {
+          ambiguousContainer.appendChild(createAmbiguousRow(idx, entry));
+        });
+      } else {
+        ambiguousSection.hidden = true;
+      }
+    }
+
+    function createEntryRow(type, idx, entry) {
+      const row = document.createElement('div');
+      row.className = 'entry-row';
+      row.dataset.type = type;
+      row.dataset.index = idx;
+      row.dataset.id = `${type}-${idx}`;
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'form-input';
+      nameInput.value = entry.name;
+      nameInput.placeholder = 'Name';
+      nameInput.dataset.field = 'name';
+
+      const amountInput = document.createElement('input');
+      amountInput.type = 'number';
+      amountInput.className = 'form-input form-input--amount';
+      amountInput.value = entry.amount || '';
+      amountInput.placeholder = '₹';
+      amountInput.dataset.field = 'amount';
+      amountInput.min = '1';
+
+      const nameCol = document.createElement('div');
+      nameCol.className = 'entry-row__name';
+      nameCol.appendChild(nameInput);
+      const nameError = document.createElement('div');
+      nameError.className = 'entry-error';
+      nameCol.appendChild(nameError);
+
+      const amountCol = document.createElement('div');
+      amountCol.className = 'entry-row__amount';
+      amountCol.appendChild(amountInput);
+      const amountError = document.createElement('div');
+      amountError.className = 'entry-error';
+      amountCol.appendChild(amountError);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'entry-row__delete';
+      deleteBtn.textContent = '✕';
+      deleteBtn.addEventListener('click', () => {
+        currentEntries[type].splice(idx, 1);
+        renderReviewPanel();
+      });
+
+      row.appendChild(nameCol);
+      row.appendChild(amountCol);
+      row.appendChild(deleteBtn);
+
+      return row;
+    }
+
+    function createAmbiguousRow(idx, entry) {
+      const row = document.createElement('div');
+      row.className = 'ambiguous-entry';
+      row.dataset.index = idx;
+
+      const info = document.createElement('div');
+      info.className = 'ambiguous-entry__info';
+
+      const name = document.createElement('span');
+      name.className = 'ambiguous-entry__name';
+      name.textContent = entry.name;
+
+      const amount = document.createElement('span');
+      amount.className = 'ambiguous-entry__amount';
+      amount.textContent = formatCurrency(entry.amount);
+
+      info.appendChild(name);
+      info.appendChild(amount);
+
+      const buttons = document.createElement('div');
+      buttons.className = 'ambiguous-entry__buttons';
+
+      const jamaBtn = document.createElement('button');
+      jamaBtn.className = 'ambiguous-btn ambiguous-btn--jama';
+      jamaBtn.textContent = 'Jama';
+      jamaBtn.addEventListener('click', () => {
+        moveAmbiguousToSide(idx, 'jama');
+      });
+
+      const udharBtn = document.createElement('button');
+      udharBtn.className = 'ambiguous-btn ambiguous-btn--udhar';
+      udharBtn.textContent = 'Udhar';
+      udharBtn.addEventListener('click', () => {
+        moveAmbiguousToSide(idx, 'udhar');
+      });
+
+      buttons.appendChild(jamaBtn);
+      buttons.appendChild(udharBtn);
+
+      row.appendChild(info);
+      row.appendChild(buttons);
+
+      return row;
+    }
+
+    function moveAmbiguousToSide(idx, side) {
+      const entry = currentEntries.ambiguous[idx];
+      disambiguated[idx] = side;
+
+      // Move entry to the target side
+      currentEntries[side].push(entry);
+      currentEntries.ambiguous.splice(idx, 1);
+
+      renderReviewPanel();
+    }
+
+    function addEmptyRow(type) {
+      currentEntries[type].push({ name: '', amount: '' });
+      renderReviewPanel();
+    }
+
+    async function handleSave() {
+      // Validate entries
+      const errors = {};
+
+      const validateSide = (type) => {
+        currentEntries[type].forEach((entry, idx) => {
+          const id = `${type}-${idx}`;
+          if (!entry.name || entry.name.trim().length === 0) {
+            errors[id] = errors[id] || {};
+            errors[id].name = 'Name required';
+          }
+          if (!entry.amount || Number(entry.amount) <= 0) {
+            errors[id] = errors[id] || {};
+            errors[id].amount = 'Amount required';
+          }
+        });
+      };
+
+      validateSide('jama');
+      validateSide('udhar');
+
+      if (Object.keys(errors).length > 0) {
+        // Show errors inline
+        document.querySelectorAll('.entry-error').forEach((el) => {
+          el.textContent = '';
+        });
+
+        Object.entries(errors).forEach(([id, errs]) => {
+          const row = document.querySelector(`[data-id="${id}"]`);
+          if (row) {
+            if (errs.name) {
+              row.querySelector('.entry-row__name .entry-error').textContent = errs.name;
+            }
+            if (errs.amount) {
+              row.querySelector('.entry-row__amount .entry-error').textContent = errs.amount;
+            }
+          }
+        });
+        return;
+      }
+
+      // All valid, proceed to save
+      showLoading('Saving entries…');
+
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const allEntries = [
+          ...currentEntries.jama.map((e) => ({ ...e, type: 'jama' })),
+          ...currentEntries.udhar.map((e) => ({ ...e, type: 'udhar' }))
+        ];
+
+        for (const entry of allEntries) {
+          // Search for party by name
+          let party = await searchPartyByName(db, entry.name);
+
+          // If not found, create new party
+          if (!party) {
+            const partyId = await addParty(db, entry.name, '');
+            party = { id: partyId, name: entry.name };
+          }
+
+          // Add transaction
+          await addTransaction(db, party.id, entry.type, entry.amount, today, null, 'scan');
+        }
+
+        hideLoading();
+        window.location.href = 'index.html';
+      } catch (error) {
+        console.error('Save error:', error);
+        hideLoading();
+        showError('Failed to save entries. Please try again.');
+      }
+    }
+  </script>
+</body>
+</html>
