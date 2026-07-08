@@ -570,10 +570,12 @@
       });
 
       // File input
+      // Note: the <label class="upload-box__label"> already wraps the
+      // hidden #file-input, so the browser opens the file picker natively
+      // whenever the box is tapped. We only need to listen for the value
+      // changing — no manual .click() call here, or the picker gets asked
+      // to open twice per tap and mobile browsers silently drop it.
       document.getElementById('file-input').addEventListener('change', handleFileSelect);
-      document.getElementById('upload-box').addEventListener('click', () => {
-        document.getElementById('file-input').click();
-      });
 
       // Scan button
       document.getElementById('scan-button').addEventListener('click', handleScan);
@@ -666,7 +668,9 @@
         document.getElementById('loading-state').classList.remove('active');
       } catch (error) {
         console.error('Scan error:', error);
-        showError('Scan failed. Check your connection or try a clearer photo.');
+        // Surface the real reason (e.g. invalid API key, bad model name) instead of
+        // a generic message — makes it obvious when the problem is config, not the photo.
+        showError(`Scan failed: ${error.message}`);
         document.getElementById('loading-state').classList.remove('active');
       }
     }
