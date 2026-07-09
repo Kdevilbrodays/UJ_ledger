@@ -561,38 +561,60 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
-      db = initSupabase();
+      try {
+        db = initSupabase();
 
-      // Back button
-      document.getElementById('btn-back').addEventListener('click', () => {
-        window.location.href = 'index.html';
-      });
+        // Back button
+        document.getElementById('btn-back').addEventListener('click', () => {
+          window.location.href = 'index.html';
+        });
 
-      // File input
-      // Note: the <label class="upload-box__label"> already wraps the
-      // hidden #file-input, so the browser opens the file picker natively
-      // whenever the box is tapped. We only need to listen for the value
-      // changing — no manual .click() call here, or the picker gets asked
-      // to open twice per tap and mobile browsers silently drop it.
-      document.getElementById('file-input').addEventListener('change', handleFileSelect);
+        // File input
+        // Note: the <label class="upload-box__label"> already wraps the
+        // hidden #file-input, so the browser opens the file picker natively
+        // whenever the box is tapped. We only need to listen for the value
+        // changing — no manual .click() call here, or the picker gets asked
+        // to open twice per tap and mobile browsers silently drop it.
+        //
+        // IMPORTANT: this listener is bound on `document` (event delegation)
+        // rather than directly on #file-input. On many Android browsers,
+        // returning from the native camera app after a capture causes the
+        // WebView to silently replace the <input> DOM node. A listener bound
+        // directly to the original node goes dead (orphaned) at that point —
+        // the change event still fires, but nothing is listening for it,
+        // which is why "nothing happens" specifically after taking a photo.
+        // Delegating to `document` survives the node being swapped out,
+        // since we're listening for the event to bubble up, not relying on
+        // the identity of the original element.
+        document.addEventListener('change', (e) => {
+          if (e.target && e.target.id === 'file-input') {
+            handleFileSelect(e);
+          }
+        });
 
-      // Scan button
-      document.getElementById('scan-button').addEventListener('click', handleScan);
+        // Scan button
+        document.getElementById('scan-button').addEventListener('click', handleScan);
 
-      // Change image
-      document.getElementById('change-image-button').addEventListener('click', () => {
-        resetImageUpload();
-      });
+        // Change image
+        document.getElementById('change-image-button').addEventListener('click', () => {
+          resetImageUpload();
+        });
 
-      // Add entry rows
-      document.getElementById('add-jama-btn').addEventListener('click', () => addEmptyRow('jama'));
-      document.getElementById('add-udhar-btn').addEventListener('click', () => addEmptyRow('udhar'));
+        // Add entry rows
+        document.getElementById('add-jama-btn').addEventListener('click', () => addEmptyRow('jama'));
+        document.getElementById('add-udhar-btn').addEventListener('click', () => addEmptyRow('udhar'));
 
-      // Save
-      document.getElementById('save-button').addEventListener('click', handleSave);
+        // Save
+        document.getElementById('save-button').addEventListener('click', handleSave);
 
-      // Update review date
-      updateReviewDate();
+        // Update review date
+        updateReviewDate();
+      } catch (error) {
+        // If setup itself fails (e.g. bad Supabase config), surface it instead
+        // of leaving the page looking "dead" with no feedback.
+        console.error('Scan page init error:', error);
+        showError(`Page failed to load correctly: ${error.message}`);
+      }
     });
 
     function updateReviewDate() {
@@ -619,6 +641,10 @@
 
         hideError();
         resetReview();
+      };
+      reader.onerror = () => {
+        console.error('FileReader error:', reader.error);
+        showError('Could not read that photo. Please try again.');
       };
       reader.readAsDataURL(file);
     }
