@@ -12,6 +12,8 @@
   --color-jama-dim:   #ddeaf7;
   --color-udhar:      #788c5d;
   --color-udhar-dim:  #e4ebda;
+  --color-danger:      #c0524a;
+  --color-danger-dim:  #f6e2df;
 
   --font-display: 'DM Serif Display', Georgia, serif;
   --font-body:    'DM Serif Text', Georgia, serif;
@@ -103,6 +105,11 @@ img {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
 }
 
 @keyframes shimmer {

@@ -1,15 +1,13 @@
 /**
- * Scan a handwritten diary page using Gemini 2.5 Flash
+ * Scan a handwritten diary page using Gemini 1.5 Flash
  * Returns parsed Jama and Udhar entries from the image
  */
 async function scanDiaryPage(imageBase64, mimeType) {
-  if (!CONFIG.GEMINI_API_KEY || CONFIG.GEMINI_API_KEY.includes('your-gemini')) {
-    throw new Error('Gemini API key is not configured (config.js still has a placeholder value)');
+  if (!CONFIG.GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured');
   }
 
-  // gemini-1.5-flash was fully shut down by Google (returns 404 on every call).
-  // gemini-2.5-flash is the current stable, low-latency multimodal model.
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
 
   const prompt = `You are reading a photograph of a single handwritten Indian business ledger diary page.
 

@@ -10,6 +10,36 @@
   <link rel="stylesheet" href="styles/components.css">
 </head>
 <body>
+  <div class="nav-drawer-overlay" id="nav-drawer-overlay" hidden>
+    <nav class="nav-drawer" id="nav-drawer" aria-label="Main navigation">
+      <div class="nav-drawer__header">
+        <span class="app-header__title">Udhar Ledger</span>
+        <button class="nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="index.html" class="nav-drawer__link" data-page="index">🏠 All Parties</a>
+        <a href="scan.html" class="nav-drawer__link" data-page="scan">📷 Scan Diary Page</a>
+        <a href="index.html?action=add-party" class="nav-drawer__link">➕ Add New Party</a>
+      </div>
+
+      <div class="nav-drawer__section">
+        <div class="nav-drawer__section-label">Jump to a ledger</div>
+        <input type="text" id="nav-party-search" class="form-input" placeholder="🔍 Find a person..." aria-label="Find a party">
+        <div id="nav-party-list" class="nav-drawer__party-list"></div>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="settings.html" class="nav-drawer__link" data-page="settings">⚙️ Settings</a>
+      </div>
+    </nav>
+  </div>
+
+  <header class="app-header">
+    <button class="nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
+    <div class="app-header__title">Party Ledger</div>
+  </header>
+
   <div class="page-shell page-shell--with-fab">
     <nav class="back-nav">
       <a href="index.html" class="back-nav__link">
@@ -167,6 +197,7 @@
 
         db = initSupabase();
         await loadPartyData();
+        initNavDrawer(db, 'party');
         setupEventListeners();
       } catch (err) {
         showError('Failed to initialize: ' + err.message);

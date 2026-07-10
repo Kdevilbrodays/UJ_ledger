@@ -23,6 +23,10 @@ function createDemoDb() {
             const filtered = rows.filter((d) => d[col] === val);
             return createSelectChain(filtered);
           },
+          neq: function(col, val) {
+            const filtered = rows.filter((d) => d[col] !== val);
+            return createSelectChain(filtered);
+          },
           ilike: function(col, val) {
             const query = String(val || '').toLowerCase();
             const filtered = rows.filter((d) => String(d[col] || '').toLowerCase().includes(query));
@@ -61,6 +65,33 @@ function createDemoDb() {
           }
         };
 
+        return chain;
+      };
+
+      const createDeleteChain = (rowsToDelete) => {
+        const chain = {
+          eq: function(col, val) {
+            return createDeleteChain(rowsToDelete.filter((d) => d[col] === val));
+          },
+          neq: function(col, val) {
+            return createDeleteChain(rowsToDelete.filter((d) => d[col] !== val));
+          },
+          then: function(resolve, reject) {
+            return Promise.resolve().then(() => {
+              const data = getTableData();
+              const deletedIds = new Set(rowsToDelete.map((row) => row.id));
+              const remaining = data.filter((row) => !deletedIds.has(row.id));
+              saveTableData(remaining);
+              return { data: null, error: null };
+            }).then(resolve, reject);
+          },
+          catch: function(reject) {
+            return Promise.resolve({ data: null, error: null }).catch(reject);
+          },
+          finally: function(callback) {
+            return Promise.resolve({ data: null, error: null }).finally(callback);
+          }
+        };
         return chain;
       };
 
@@ -112,6 +143,9 @@ function createDemoDb() {
               });
             }
           };
+        },
+        delete: function() {
+          return createDeleteChain(getTableData());
         }
       };
       return methods;
@@ -239,4 +273,36 @@ function subscribeToParties(db, callback) {
       callback
     )
     .subscribe();
+}
+
+async function deleteParty(db, partyId) {
+  const { error: txError } = await db.from('transactions').delete().eq('party_id', partyId);
+  if (txError) throw txError;
+  const { error: partyError } = await db.from('parties').delete().eq('id', partyId);
+  if (partyError) throw partyError;
+}
+
+async function clearAllData(db) {
+  const { error: txError } = await db.from('transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (txError) throw txError;
+  const { error: partyError } = await db.from('parties').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (partyError) throw partyError;
+}
+
+async function getDataCounts(db) {
+  const { data: parties, error: pErr } = await db.from('parties').select('id');
+  if (pErr) throw pErr;
+  const { data: txns, error: tErr } = await db.from('transactions').select('id');
+  if (tErr) throw tErr;
+  return { parties: (parties || []).length, transactions: (txns || []).length };
+}
+
+async function exportAllData(db) {
+  const parties = await getAllParties(db);
+  const transactions = [];
+  for (const p of parties) {
+    const txns = await getTransactions(db, p.id);
+    transactions.push(...txns);
+  }
+  return { exported_at: new Date().toISOString(), parties, transactions };
 }

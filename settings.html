@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Udhar Ledger</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Serif+Text:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+  <div class="nav-drawer-overlay" id="nav-drawer-overlay" hidden>
+    <nav class="nav-drawer" id="nav-drawer" aria-label="Main navigation">
+      <div class="nav-drawer__header">
+        <span class="app-header__title">Udhar Ledger</span>
+        <button class="nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="index.html" class="nav-drawer__link" data-page="index">🏠 All Parties</a>
+        <a href="scan.html" class="nav-drawer__link" data-page="scan">📷 Scan Diary Page</a>
+        <a href="index.html?action=add-party" class="nav-drawer__link">➕ Add New Party</a>
+      </div>
+
+      <div class="nav-drawer__section">
+        <div class="nav-drawer__section-label">Jump to a ledger</div>
+        <input type="text" id="nav-party-search" class="form-input" placeholder="🔍 Find a person..." aria-label="Find a party">
+        <div id="nav-party-list" class="nav-drawer__party-list"></div>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="settings.html" class="nav-drawer__link" data-page="settings">⚙️ Settings</a>
+      </div>
+    </nav>
+  </div>
+
+  <header class="app-header">
+    <button class="nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
+    <div class="app-header__title">Settings</div>
+  </header>
+
+  <div class="page-shell">
+    <div class="page-content">
+      <div class="settings-section">
+        <div class="settings-section__title">Data</div>
+        <div class="settings-row">
+          <span class="settings-row__label">Export backup</span>
+          <button class="btn btn--primary" id="btn-download-backup">Download Backup</button>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row__label">Manage parties</span>
+          <div class="settings-row__control" id="party-manage-list"></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section__title">About</div>
+        <div class="settings-row">
+          <span class="settings-row__label">App name</span>
+          <span>Udhar Ledger</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row__label">Platform</span>
+          <span>Plain HTML + CSS + vanilla JS · Supabase · Gemini 1.5 Flash</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-row__label">Connection</span>
+          <span id="connection-status">Checking...</span>
+        </div>
+      </div>
+
+      <div class="settings-section settings-section--danger">
+        <div class="settings-section__title">Danger Zone</div>
+        <div class="settings-row">
+          <span class="settings-row__label">Clear all data</span>
+          <button class="btn btn--danger" id="btn-clear-all">Clear All Data</button>
+        </div>
+      </div>
+
+      <div id="danger-modal" class="modal-overlay" hidden>
+        <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="danger-modal-title">
+          <h2 class="modal__title" id="danger-modal-title">Clear All Data</h2>
+          <p>This permanently deletes <strong>all parties and all transactions</strong> from the database. This cannot be undone.</p>
+          <p id="danger-counts" style="margin-top: var(--space-md); color: var(--color-ink-muted);"></p>
+          <p style="margin-top: var(--space-md);">Make sure you downloaded a backup first. Use the Export backup action above.</p>
+          <div class="form-group">
+            <label class="form-label" for="confirm-delete-input">Type DELETE to confirm.</label>
+            <input id="confirm-delete-input" class="confirm-input" type="text" autocomplete="off">
+          </div>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--secondary" id="btn-cancel-clear">Cancel</button>
+            <button type="button" class="btn btn--danger" id="btn-confirm-clear" disabled>Confirm Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="single-delete-modal" class="modal-overlay" hidden>
+        <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="single-delete-title">
+          <h2 class="modal__title" id="single-delete-title">Delete Party</h2>
+          <p id="single-delete-text"></p>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--secondary" id="btn-cancel-single-delete">Cancel</button>
+            <button type="button" class="btn btn--danger" id="btn-confirm-single-delete">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="success-banner" class="banner banner--info" hidden></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let db;
+    let deleteTarget = null;
+
+    async function init() {
+      try {
+        db = initSupabase();
+        initNavDrawer(db, 'settings');
+        setupEventListeners();
+        renderConnectionStatus();
+        await loadPartyManageList();
+      } catch (err) {
+        showError('Failed to initialize: ' + err.message);
+      }
+    }
+
+    async function renderConnectionStatus() {
+      const isDemo = CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_ANON_KEY.includes('your-anon');
+      document.getElementById('connection-status').textContent = isDemo
+        ? 'Demo mode (data stored on this device only)'
+        : 'Connected to Supabase';
+    }
+
+    async function loadPartyManageList() {
+      try {
+        const parties = await getAllParties(db);
+        const container = document.getElementById('party-manage-list');
+        container.innerHTML = '';
+        parties.forEach((party) => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.gap = '0.75rem';
+          row.style.marginTop = '0.75rem';
+
+          const name = document.createElement('span');
+          name.textContent = party.name;
+          name.style.flex = '1';
+          name.style.fontFamily = 'var(--font-display)';
+          name.style.fontSize = '0.95rem';
+
+          const button = document.createElement('button');
+          button.className = 'btn btn--secondary';
+          button.textContent = 'Delete';
+          button.addEventListener('click', () => openSingleDeleteModal(party));
+
+          row.append(name, button);
+          container.appendChild(row);
+        });
+      } catch (err) {
+        showError('Failed to load parties: ' + err.message);
+      }
+    }
+
+    function openSingleDeleteModal(party) {
+      deleteTarget = party;
+      document.getElementById('single-delete-text').textContent = `Delete ${party.name} and all of their transactions? This can't be undone.`;
+      document.getElementById('single-delete-modal').hidden = false;
+    }
+
+    function closeSingleDeleteModal() {
+      deleteTarget = null;
+      document.getElementById('single-delete-modal').hidden = true;
+    }
+
+    async function setupEventListeners() {
+      document.getElementById('btn-download-backup').addEventListener('click', async () => {
+        try {
+          const data = await exportAllData(db);
+          const filename = `udhar-ledger-backup-${new Date().toISOString().split('T')[0]}.json`;
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = filename;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          showError('Failed to export backup: ' + err.message);
+        }
+      });
+
+      document.getElementById('btn-clear-all').addEventListener('click', async () => {
+        await refreshDangerCounts();
+        document.getElementById('confirm-delete-input').value = '';
+        document.getElementById('btn-confirm-clear').disabled = true;
+        document.getElementById('danger-modal').hidden = false;
+      });
+
+      document.getElementById('btn-cancel-clear').addEventListener('click', () => {
+        document.getElementById('danger-modal').hidden = true;
+      });
+
+      document.getElementById('confirm-delete-input').addEventListener('input', (event) => {
+        document.getElementById('btn-confirm-clear').disabled = event.target.value !== 'DELETE';
+      });
+
+      document.getElementById('btn-confirm-clear').addEventListener('click', async () => {
+        try {
+          showLoading('Clearing all data…');
+          await clearAllData(db);
+          hideLoading();
+          document.getElementById('danger-modal').hidden = true;
+          document.getElementById('success-banner').textContent = 'All data cleared.';
+          document.getElementById('success-banner').hidden = false;
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 1500);
+        } catch (err) {
+          hideLoading();
+          showError('Failed to clear data: ' + err.message);
+        }
+      });
+
+      document.getElementById('btn-cancel-single-delete').addEventListener('click', closeSingleDeleteModal);
+      document.getElementById('btn-confirm-single-delete').addEventListener('click', async () => {
+        if (!deleteTarget) return;
+        try {
+          showLoading('Deleting party…');
+          await deleteParty(db, deleteTarget.id);
+          hideLoading();
+          closeSingleDeleteModal();
+          await loadPartyManageList();
+          document.getElementById('success-banner').textContent = `${deleteTarget.name} deleted.`;
+          document.getElementById('success-banner').hidden = false;
+          setTimeout(() => {
+            document.getElementById('success-banner').hidden = true;
+          }, 3000);
+        } catch (err) {
+          hideLoading();
+          showError('Failed to delete party: ' + err.message);
+        }
+      });
+    }
+
+    async function refreshDangerCounts() {
+      try {
+        const counts = await getDataCounts(db);
+        document.getElementById('danger-counts').textContent = `This will delete ${counts.parties} parties and ${counts.transactions} transactions.`;
+      } catch (err) {
+        showError('Failed to count data: ' + err.message);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

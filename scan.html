@@ -466,9 +466,35 @@
   </style>
 </head>
 <body>
+  <div class="nav-drawer-overlay" id="nav-drawer-overlay" hidden>
+    <nav class="nav-drawer" id="nav-drawer" aria-label="Main navigation">
+      <div class="nav-drawer__header">
+        <span class="app-header__title">Udhar Ledger</span>
+        <button class="nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="index.html" class="nav-drawer__link" data-page="index">🏠 All Parties</a>
+        <a href="scan.html" class="nav-drawer__link" data-page="scan">📷 Scan Diary Page</a>
+        <a href="index.html?action=add-party" class="nav-drawer__link">➕ Add New Party</a>
+      </div>
+
+      <div class="nav-drawer__section">
+        <div class="nav-drawer__section-label">Jump to a ledger</div>
+        <input type="text" id="nav-party-search" class="form-input" placeholder="🔍 Find a person..." aria-label="Find a party">
+        <div id="nav-party-list" class="nav-drawer__party-list"></div>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="settings.html" class="nav-drawer__link" data-page="settings">⚙️ Settings</a>
+      </div>
+    </nav>
+  </div>
+
   <header class="app-header">
-    <button class="scan-page__back" id="btn-back" aria-label="Go back">←</button>
+    <button class="nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
     <div class="app-header__title">Scan Diary Page</div>
+    <button class="scan-page__back" id="btn-back" aria-label="Go back">←</button>
   </header>
 
   <div class="page-shell">
@@ -488,6 +514,7 @@
               id="file-input"
               class="upload-box__input"
               accept="image/*"
+              capture="environment"
             />
           </label>
         </div>
@@ -543,7 +570,6 @@
   </div>
 
   <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="config.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>
@@ -562,60 +588,37 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
-      try {
-        db = initSupabase();
+      db = initSupabase();
+      initNavDrawer(db, 'scan');
 
-        // Back button
-        document.getElementById('btn-back').addEventListener('click', () => {
-          window.location.href = 'index.html';
-        });
+      // Back button
+      document.getElementById('btn-back').addEventListener('click', () => {
+        window.location.href = 'index.html';
+      });
 
-        // File input
-        // Note: the <label class="upload-box__label"> already wraps the
-        // hidden #file-input, so the browser opens the file picker natively
-        // whenever the box is tapped. We only need to listen for the value
-        // changing — no manual .click() call here, or the picker gets asked
-        // to open twice per tap and mobile browsers silently drop it.
-        //
-        // IMPORTANT: this listener is bound on `document` (event delegation)
-        // rather than directly on #file-input. On many Android browsers,
-        // returning from the native camera app after a capture causes the
-        // WebView to silently replace the <input> DOM node. A listener bound
-        // directly to the original node goes dead (orphaned) at that point —
-        // the change event still fires, but nothing is listening for it,
-        // which is why "nothing happens" specifically after taking a photo.
-        // Delegating to `document` survives the node being swapped out,
-        // since we're listening for the event to bubble up, not relying on
-        // the identity of the original element.
-        document.addEventListener('change', (e) => {
-          if (e.target && e.target.id === 'file-input') {
-            handleFileSelect(e);
-          }
-        });
+      // File input
+      document.getElementById('file-input').addEventListener('change', handleFileSelect);
+      document.getElementById('upload-box').addEventListener('click', () => {
+        document.getElementById('file-input').click();
+      });
 
-        // Scan button
-        document.getElementById('scan-button').addEventListener('click', handleScan);
+      // Scan button
+      document.getElementById('scan-button').addEventListener('click', handleScan);
 
-        // Change image
-        document.getElementById('change-image-button').addEventListener('click', () => {
-          resetImageUpload();
-        });
+      // Change image
+      document.getElementById('change-image-button').addEventListener('click', () => {
+        resetImageUpload();
+      });
 
-        // Add entry rows
-        document.getElementById('add-jama-btn').addEventListener('click', () => addEmptyRow('jama'));
-        document.getElementById('add-udhar-btn').addEventListener('click', () => addEmptyRow('udhar'));
+      // Add entry rows
+      document.getElementById('add-jama-btn').addEventListener('click', () => addEmptyRow('jama'));
+      document.getElementById('add-udhar-btn').addEventListener('click', () => addEmptyRow('udhar'));
 
-        // Save
-        document.getElementById('save-button').addEventListener('click', handleSave);
+      // Save
+      document.getElementById('save-button').addEventListener('click', handleSave);
 
-        // Update review date
-        updateReviewDate();
-      } catch (error) {
-        // If setup itself fails (e.g. bad Supabase config), surface it instead
-        // of leaving the page looking "dead" with no feedback.
-        console.error('Scan page init error:', error);
-        showError(`Page failed to load correctly: ${error.message}`);
-      }
+      // Update review date
+      updateReviewDate();
     });
 
     function updateReviewDate() {
@@ -642,10 +645,6 @@
 
         hideError();
         resetReview();
-      };
-      reader.onerror = () => {
-        console.error('FileReader error:', reader.error);
-        showError('Could not read that photo. Please try again.');
       };
       reader.readAsDataURL(file);
     }
@@ -694,9 +693,7 @@
         document.getElementById('loading-state').classList.remove('active');
       } catch (error) {
         console.error('Scan error:', error);
-        // Surface the real reason (e.g. invalid API key, bad model name) instead of
-        // a generic message — makes it obvious when the problem is config, not the photo.
-        showError(`Scan failed: ${error.message}`);
+        showError('Scan failed. Check your connection or try a clearer photo.');
         document.getElementById('loading-state').classList.remove('active');
       }
     }
