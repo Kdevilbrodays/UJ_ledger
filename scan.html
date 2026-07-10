@@ -53,25 +53,23 @@
       border-radius: var(--radius-md);
       padding: var(--space-lg);
       text-align: center;
-      cursor: pointer;
       transition: 0.15s ease;
     }
 
-    .upload-box:hover {
-      border-color: var(--color-accent);
-      background: rgba(217, 119, 87, 0.02);
-    }
-
     .upload-box__input {
-      display: none;
-    }
-
-    .upload-box__label {
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-sm);
-      align-items: center;
+      /* Visually hidden but still a real, focusable, tappable target.
+         The <label> wrapping each input is what opens the native picker —
+         no JS .click() call needed, which is the most reliable pattern
+         across Android Chrome, iOS Safari, and desktop browsers. */
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .upload-box__icon {
@@ -88,6 +86,48 @@
       font-size: 0.8125rem;
       color: var(--color-ink-muted);
       margin-top: var(--space-xs);
+      margin-bottom: var(--space-md);
+    }
+
+    /* Two explicit actions instead of one ambiguous tap target. Letting the
+       user choose intent up front (rather than relying on the browser to
+       offer both camera + gallery from a single input) sidesteps a real,
+       currently-open Android bug: Chrome on Android 14/15 frequently drops
+       the Camera tile from the combined picker and shows gallery only. */
+    .upload-box__actions {
+      display: flex;
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .upload-box__button {
+      flex: 1 1 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: var(--space-md);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--color-ink);
+      transition: 0.15s ease;
+    }
+
+    .upload-box__button:hover {
+      border-color: var(--color-accent);
+      background: rgba(217, 119, 87, 0.04);
+      color: var(--color-accent);
+    }
+
+    .upload-box__button-icon {
+      font-size: 1.5rem;
     }
 
     /* Image Preview */
@@ -462,6 +502,10 @@
       .upload-box__icon {
         font-size: 2rem;
       }
+
+      .upload-box__button {
+        flex-basis: 100%;
+      }
     }
   </style>
 </head>
@@ -505,18 +549,42 @@
       <!-- Upload Section -->
       <div class="upload-section">
         <div class="upload-box" id="upload-box">
-          <label class="upload-box__label">
-            <div class="upload-box__icon">📷</div>
-            <div class="upload-box__text">Take Photo / Choose from Gallery</div>
-            <div class="upload-box__subtext">Photograph your diary page clearly</div>
-            <input
-              type="file"
-              id="file-input"
-              class="upload-box__input"
-              accept="image/*"
-              capture="environment"
-            />
-          </label>
+          <div class="upload-box__icon">📷</div>
+          <div class="upload-box__text">Add a photo of your diary page</div>
+          <div class="upload-box__subtext">Photograph it clearly, or choose one you've already taken</div>
+
+          <div class="upload-box__actions">
+            <!-- capture="environment" hints the OS to open the rear camera
+                 directly. Honored by Android Chrome/Firefox and iOS Safari
+                 on mobile; on desktop browsers (Windows/macOS/ChromeOS)
+                 there's no camera to prefer, so this just falls back to a
+                 normal file picker — never an error either way. -->
+            <label class="upload-box__button" for="file-input-camera">
+              <span class="upload-box__button-icon">📸</span>
+              <span>Take Photo</span>
+              <input
+                type="file"
+                id="file-input-camera"
+                class="upload-box__input"
+                accept="image/*"
+                capture="environment"
+              />
+            </label>
+
+            <!-- No capture attribute here on purpose, so the OS shows its
+                 normal photo/file picker (gallery, Files, Google Photos,
+                 iCloud, etc.) instead of jumping straight to the camera. -->
+            <label class="upload-box__button" for="file-input-gallery">
+              <span class="upload-box__button-icon">🖼️</span>
+              <span>Choose from Gallery</span>
+              <input
+                type="file"
+                id="file-input-gallery"
+                class="upload-box__input"
+                accept="image/*"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -570,6 +638,7 @@
   </div>
 
   <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="config.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>
@@ -597,15 +666,16 @@
           window.location.href = 'index.html';
         });
 
-        // File input
-        // Note: the <label class="upload-box__label"> already wraps the
-        // hidden #file-input, so the browser opens the file picker natively
-        // whenever the box is tapped. We only need to listen for the value
-        // changing — no manual .click() call here, or the picker gets asked
-        // to open twice per tap and mobile browsers silently drop it.
+        // File inputs (two of them: #file-input-camera and #file-input-gallery)
+        // Note: each <label class="upload-box__button"> already wraps its
+        // hidden <input>, so the browser opens the file picker natively
+        // whenever the button is tapped. We only need to listen for the
+        // value changing — no manual .click() call here, or the picker
+        // gets asked to open twice per tap and mobile browsers silently
+        // drop it.
         //
         // IMPORTANT: this listener is bound on `document` (event delegation)
-        // rather than directly on #file-input. On many Android browsers,
+        // rather than directly on the inputs. On many Android browsers,
         // returning from the native camera app after a capture causes the
         // WebView to silently replace the <input> DOM node. A listener bound
         // directly to the original node goes dead (orphaned) at that point —
@@ -614,8 +684,9 @@
         // Delegating to `document` survives the node being swapped out,
         // since we're listening for the event to bubble up, not relying on
         // the identity of the original element.
+        const FILE_INPUT_IDS = new Set(['file-input-camera', 'file-input-gallery']);
         document.addEventListener('change', (e) => {
-          if (e.target && e.target.id === 'file-input') {
+          if (e.target && FILE_INPUT_IDS.has(e.target.id)) {
             handleFileSelect(e);
           }
         });
@@ -656,7 +727,16 @@
 
     function handleFileSelect(e) {
       const file = e.target.files[0];
-      if (!file) return;
+      if (!file) return; // user cancelled the picker — not an error
+
+      // Some pickers (Android's "Files" app, Windows File Explorer) don't
+      // strictly enforce accept="image/*", so double check here rather than
+      // letting a non-image reach the scan/upload step.
+      if (!file.type.startsWith('image/')) {
+        showError('That doesn\'t look like an image. Please choose a photo.');
+        e.target.value = '';
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -680,7 +760,8 @@
     function resetImageUpload() {
       currentImageBase64 = null;
       currentImageMimeType = null;
-      document.getElementById('file-input').value = '';
+      document.getElementById('file-input-camera').value = '';
+      document.getElementById('file-input-gallery').value = '';
       document.getElementById('image-preview').classList.remove('active');
       resetReview();
     }
