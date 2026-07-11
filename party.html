@@ -210,10 +210,6 @@
         showLoading('Loading party…');
         party = await getParty(db, partyId);
         transactions = await getTransactions(db, partyId);
-        const derivedBalance = (transactions || []).reduce((acc, t) => {
-          return t.type === 'udhar' ? acc + (t.amount || 0) : acc - (t.amount || 0);
-        }, 0);
-        party = { ...party, current_balance: derivedBalance };
         hideLoading();
         renderPartyView();
       } catch (err) {
@@ -348,8 +344,14 @@
           <div class="txn-card__amount">${amount}</div>
         </div>
         <div class="txn-card__date">${date}</div>
-        ${txn.note ? `<div class="txn-card__note">${txn.note}</div>` : ''}
       `;
+
+      if (txn.note) {
+        const noteDiv = document.createElement('div');
+        noteDiv.className = 'txn-card__note';
+        noteDiv.textContent = txn.note;
+        card.appendChild(noteDiv);
+      }
 
       return card;
     }

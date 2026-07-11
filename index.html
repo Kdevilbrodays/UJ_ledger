@@ -157,17 +157,6 @@
       try {
         showLoading('Loading parties…');
         allParties = await getAllParties(db);
-        allParties = await Promise.all(allParties.map(async (party) => {
-          try {
-            const txns = await getTransactions(db, party.id);
-            const derivedBalance = (txns || []).reduce((acc, t) => {
-              return t.type === 'udhar' ? acc + (t.amount || 0) : acc - (t.amount || 0);
-            }, 0);
-            return { ...party, current_balance: derivedBalance };
-          } catch {
-            return party;
-          }
-        }));
         hideLoading();
         renderParties();
       } catch (err) {
@@ -241,15 +230,24 @@
         lastActivityText = 'Last: Updated · ' + formatRelativeDate(lastDate);
       }
 
-      card.innerHTML = `
-        <div class="party-card__info">
-          <div class="party-card__name">${party.name}</div>
-          <div class="party-card__meta">${lastActivityText}</div>
-        </div>
-        <div class="party-card__balance ${balanceClass}">
-          ${formatCurrency(balance)}
-        </div>
-      `;
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'party-card__info';
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'party-card__name';
+      nameDiv.textContent = party.name;
+
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'party-card__meta';
+      metaDiv.textContent = lastActivityText;
+
+      infoDiv.append(nameDiv, metaDiv);
+
+      const balanceDiv = document.createElement('div');
+      balanceDiv.className = `party-card__balance ${balanceClass}`;
+      balanceDiv.textContent = formatCurrency(balance);
+
+      card.append(infoDiv, balanceDiv);
 
       card.addEventListener('click', () => {
         window.location.href = `party.html?id=${party.id}`;

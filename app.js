@@ -181,10 +181,16 @@ async function renderNavPartyList(db) {
       item.href = `party.html?id=${party.id}`;
       item.dataset.partyId = party.id;
       item.className = 'nav-drawer__party-item';
-      item.innerHTML = `
-        <span class="nav-drawer__party-name">${party.name}</span>
-        <span class="nav-drawer__party-balance ${balanceClass}">${formatCurrency(balance)}</span>
-      `;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'nav-drawer__party-name';
+      nameSpan.textContent = party.name;
+
+      const balanceSpan = document.createElement('span');
+      balanceSpan.className = `nav-drawer__party-balance ${balanceClass}`;
+      balanceSpan.textContent = formatCurrency(balance);
+
+      item.append(nameSpan, balanceSpan);
       partyListEl.appendChild(item);
     });
   } catch (err) {

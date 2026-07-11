@@ -1,5 +1,5 @@
 /**
- * Scan a handwritten diary page using Gemini 1.5 Flash
+ * Scan a handwritten diary page using Gemini 3.5 Flash
  * Returns parsed Jama and Udhar entries from the image
  */
 async function scanDiaryPage(imageBase64, mimeType) {
@@ -7,7 +7,7 @@ async function scanDiaryPage(imageBase64, mimeType) {
     throw new Error('Gemini API key is not configured');
   }
 
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent`;
 
   const prompt = `You are reading a photograph of a single handwritten Indian business ledger diary page.
 
@@ -52,7 +52,10 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': CONFIG.GEMINI_API_KEY
+      },
       body: JSON.stringify(payload)
     });
 
