@@ -49,6 +49,13 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
     ]
   };
 
+  // Without this, a slow/flaky mobile connection leaves the fetch pending
+  // indefinitely — no error, no timeout, just the loading shimmer forever.
+  // Aborting after 45s turns that into a clear, recoverable error instead.
+  const REQUEST_TIMEOUT_MS = 45000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -56,8 +63,10 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
         'Content-Type': 'application/json',
         'x-goog-api-key': CONFIG.GEMINI_API_KEY
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -129,6 +138,10 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
       error: parsed.error || null
     };
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Scan timed out — check your connection and try again.');
+    }
     throw error;
   }
 }
