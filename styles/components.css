@@ -14,7 +14,7 @@
 }
 
 .btn--primary {
-  background: var(--color-accent);
+  background: var(--color-accent-strong);
   color: var(--color-surface);
 }
 
@@ -82,6 +82,42 @@
 
 .settings-row__control {
   margin-left: auto;
+}
+
+/* Manage parties: a heading above a variable-length list, not a single
+   label+control row — see Phase 6 audit 1.7. Intentionally not a
+   .settings-row, so the label doesn't vertically center against the whole
+   list and long names can wrap without competing with align-items:center. */
+.settings-party-manager {
+  padding: var(--space-sm) 0;
+}
+
+.settings-party-manager__label {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  margin-bottom: var(--space-sm);
+}
+
+.settings-party-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.settings-party-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.settings-party-row__name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  overflow-wrap: break-word;
 }
 
 .settings-section--danger {
@@ -161,8 +197,8 @@
   flex-shrink: 0;
 }
 
-.party-card__balance--positive { color: var(--color-udhar); }
-.party-card__balance--negative { color: var(--color-jama); }
+.party-card__balance--positive { color: var(--color-udhar-text); }
+.party-card__balance--negative { color: var(--color-jama-text); }
 .party-card__balance--zero     { color: var(--color-ink-muted); }
 
 .card-list {
@@ -203,8 +239,8 @@
   letter-spacing: 0.04em;
 }
 
-.txn-card--jama .txn-card__type { color: var(--color-jama); }
-.txn-card--udhar .txn-card__type { color: var(--color-udhar); }
+.txn-card--jama .txn-card__type { color: var(--color-jama-text); }
+.txn-card--udhar .txn-card__type { color: var(--color-udhar-text); }
 
 .txn-card__amount {
   font-family: var(--font-mono);
@@ -250,8 +286,8 @@
   line-height: 1.2;
 }
 
-.balance-summary__amount--positive { color: var(--color-udhar); }
-.balance-summary__amount--negative { color: var(--color-jama); }
+.balance-summary__amount--positive { color: var(--color-udhar-text); }
+.balance-summary__amount--negative { color: var(--color-jama-text); }
 .balance-summary__amount--zero     { color: var(--color-ink-muted); }
 
 /* Balance ribbon */
@@ -266,6 +302,43 @@
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.balance-ribbon__hint {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+/* Filter bar (search + balance filter on index.html). A real flex container
+   in its own right — not accidentally wrapping unrelated siblings. Search
+   grows to fill available space; Balance sits alongside it as a narrower
+   field, and both sit on one row as soon as there's room (see Phase 6
+   audit 1.1). */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.filter-bar__field {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-bar__field--search {
+  flex: 1 1 220px;
+}
+
+.filter-bar__field--balance {
+  flex: 1 1 200px;
+  max-width: 280px;
 }
 
 /* Forms */
@@ -302,6 +375,7 @@
 
 .form-input--amount {
   font-family: var(--font-mono);
+  text-align: right;
 }
 
 .form-input:disabled {
@@ -377,6 +451,32 @@
   background: var(--color-bg);
   color: var(--color-ink-muted);
   border: 1px solid var(--color-border);
+}
+
+.banner--info {
+  background: var(--color-jama-dim);
+  color: var(--color-ink);
+  border: 1px solid var(--color-jama);
+}
+
+/* Loading state: shimmer + status text shown while a page-local task (e.g.
+   scanning a diary page) is in progress. This lived as a shadow copy in
+   scan.html's local <style> block; consolidated here since it's the same
+   pattern components.css already provides for .loading-block, just toggled
+   via an .active class instead of the hidden attribute. */
+.loading-state {
+  display: none;
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.loading-state.active {
+  display: block;
+}
+
+.loading-text {
+  font-family: var(--font-ui);
+  color: var(--color-ink-muted);
 }
 
 /* Loading */

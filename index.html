@@ -41,27 +41,26 @@
     <button class="btn btn--primary app-header__action" id="btn-add-party">+ Add</button>
   </header>
 
-  <div class="page-shell">
+  <div class="page-shell page-shell--with-fab">
     <div class="page-content">
       <!-- Search + Balance Filter -->
-      <div class="form-group" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
-        <div style="flex: 1 1 220px;">
-          <label for="search-parties" class="form-label" style="margin-bottom:0.25rem; display:block;">Search</label>
+      <div class="filter-bar">
+        <div class="filter-bar__field filter-bar__field--search">
+          <label for="search-parties" class="form-label">Search</label>
           <input
             type="text"
             id="search-parties"
-          class="form-input"
-          placeholder="🔍 Search parties..."
-          aria-label="Search parties by name"
-          style="flex:1 1 220px;"
-        />
-        <div style="max-width: 180px;">
-          <label for="balance-filter" class="form-label" style="margin-bottom:0.25rem; display:block;">Balance</label>
+            class="form-input"
+            placeholder="🔍 Search parties..."
+            aria-label="Search parties by name"
+          />
+        </div>
+        <div class="filter-bar__field filter-bar__field--balance">
+          <label for="balance-filter" class="form-label">Balance</label>
           <select
             id="balance-filter"
             class="form-input"
             aria-label="Filter parties by balance"
-            style="width: 100%;"
           >
             <option value="all">All balances</option>
             <option value="positive">They owe us</option>
@@ -75,11 +74,11 @@
       <div id="parties-list" class="card-list"></div>
 
       <!-- Empty States -->
-      <div id="empty-no-parties" class="empty-state" style="display: none;">
+      <div id="empty-no-parties" class="empty-state" hidden>
         <p>No parties yet. Tap + Add to get started.</p>
       </div>
 
-      <div id="empty-no-search" class="empty-state" style="display: none;">
+      <div id="empty-no-search" class="empty-state" hidden>
         <p id="empty-search-message">No match for '[query]'.</p>
       </div>
     </div>
@@ -94,8 +93,8 @@
 
   <!-- Modal for Adding Party -->
   <div id="modal-add-party" class="modal-overlay" hidden>
-    <div class="card modal">
-      <h2 class="modal__title">Add Party</h2>
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="add-party-modal-title">
+      <h2 class="modal__title" id="add-party-modal-title">Add Party</h2>
       <form id="form-add-party">
         <div class="form-group">
           <label for="input-party-name" class="form-label">Name</label>
@@ -144,8 +143,7 @@
         setupEventListeners();
         setupRealtimeSubscription();
         if (getParam('action') === 'add-party') {
-          document.getElementById('modal-add-party').hidden = false;
-          document.getElementById('input-party-name').focus();
+          openModal(document.getElementById('modal-add-party'));
         }
       } catch (err) {
         showError('Failed to initialize: ' + err.message);
@@ -211,9 +209,9 @@
 
     // Create party card element
     function createPartyCard(party) {
-      const card = document.createElement('div');
+      const card = document.createElement('a');
+      card.href = `party.html?id=${party.id}`;
       card.className = 'card party-card';
-      card.style.cursor = 'pointer';
 
       const balance = party.current_balance || 0;
       const balanceClass = balance > 0 ? 'party-card__balance--positive' :
@@ -249,10 +247,6 @@
 
       card.append(infoDiv, balanceDiv);
 
-      card.addEventListener('click', () => {
-        window.location.href = `party.html?id=${party.id}`;
-      });
-
       return card;
     }
 
@@ -260,13 +254,12 @@
     function setupEventListeners() {
       // Add party button
       document.getElementById('btn-add-party').addEventListener('click', () => {
-        document.getElementById('modal-add-party').hidden = false;
-        document.getElementById('input-party-name').focus();
+        openModal(document.getElementById('modal-add-party'));
       });
 
       // Cancel add party modal
       document.getElementById('btn-cancel-add-party').addEventListener('click', () => {
-        document.getElementById('modal-add-party').hidden = true;
+        closeModal(document.getElementById('modal-add-party'));
         document.getElementById('form-add-party').reset();
       });
 
@@ -285,7 +278,7 @@
           showLoading('Adding party…');
           await addParty(db, name, phone || null);
           hideLoading();
-          document.getElementById('modal-add-party').hidden = true;
+          closeModal(document.getElementById('modal-add-party'));
           document.getElementById('form-add-party').reset();
           await loadParties();
         } catch (err) {

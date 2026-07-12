@@ -60,11 +60,11 @@
         <div style="display: flex; gap: var(--space-md); justify-content: center; margin-top: var(--space-lg); font-size: 0.875rem;">
           <div>
             <div style="color: var(--color-ink-muted);">Total Jama</div>
-            <div id="total-jama" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-jama);"></div>
+            <div id="total-jama" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-jama-text);"></div>
           </div>
           <div>
             <div style="color: var(--color-ink-muted);">Total Udhar</div>
-            <div id="total-udhar" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-udhar);"></div>
+            <div id="total-udhar" style="font-family: var(--font-mono); font-weight: 500; color: var(--color-udhar-text);"></div>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@
         <h2 style="font-family: var(--font-display); font-size: 1.125rem; margin-bottom: var(--space-md); color: var(--color-ink-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 400;">Transactions</h2>
         <div id="transactions-list" class="card-list"></div>
 
-        <div id="empty-transactions" class="empty-state" style="display: none;">
+        <div id="empty-transactions" class="empty-state" hidden>
           <p>No entries yet. Add one above or scan a diary page.</p>
         </div>
       </div>
@@ -94,8 +94,8 @@
 
   <!-- Modal for Adding Jama -->
   <div id="modal-add-jama" class="modal-overlay" hidden>
-    <div class="card modal">
-      <h2 class="modal__title">Add Jama</h2>
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="add-jama-modal-title">
+      <h2 class="modal__title" id="add-jama-modal-title">Add Jama</h2>
       <form id="form-add-jama">
         <div class="form-group">
           <label for="jama-amount" class="form-label">Amount</label>
@@ -136,8 +136,8 @@
 
   <!-- Modal for Adding Udhar -->
   <div id="modal-add-udhar" class="modal-overlay" hidden>
-    <div class="card modal">
-      <h2 class="modal__title">Add Udhar</h2>
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="add-udhar-modal-title">
+      <h2 class="modal__title" id="add-udhar-modal-title">Add Udhar</h2>
       <form id="form-add-udhar">
         <div class="form-group">
           <label for="udhar-amount" class="form-label">Amount</label>
@@ -262,9 +262,22 @@
     }
 
     // Render balance ribbon (SVG visualization)
+    // Below this many transactions, a sparkline has no real trend to show —
+    // 1-3 points stretched across the full ribbon width renders as one or two
+    // enormous blocks rather than a line. Show a plain-language hint instead.
+    // See Phase 6 audit 1.3.
+    const RIBBON_MIN_TRANSACTIONS = 4;
+
     function renderBalanceRibbon() {
+      const ribbonEl = document.getElementById('balance-ribbon');
+
       if (transactions.length === 0) {
-        document.getElementById('balance-ribbon').innerHTML = '';
+        ribbonEl.innerHTML = '';
+        return;
+      }
+
+      if (transactions.length < RIBBON_MIN_TRANSACTIONS) {
+        ribbonEl.innerHTML = '<p class="balance-ribbon__hint">Add a few more entries to see a trend.</p>';
         return;
       }
 
@@ -284,8 +297,11 @@
       const spacing = 2;
       const totalWidth = (barWidth + spacing) * sorted.length;
 
-      // Create SVG
-      let svg = '<svg viewBox="0 0 ' + totalWidth + ' 48" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width: 100%; height: 100%;">';
+      // Create SVG. Purely decorative — the balance summary and transaction
+      // list above/below already convey the same info as text, so hide it
+      // from screen readers rather than let them attempt to parse raw <rect>
+      // elements. See Phase 6 audit 2.7.
+      let svg = '<svg viewBox="0 0 ' + totalWidth + ' 48" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width: 100%; height: 100%;" aria-hidden="true">';
 
       // Center line
       svg += `<line x1="0" y1="${centerY}" x2="${totalWidth}" y2="${centerY}" stroke="currentColor" opacity="0.1" stroke-width="1" stroke-dasharray="2,2" />`;
@@ -306,7 +322,7 @@
       });
 
       svg += '</svg>';
-      document.getElementById('balance-ribbon').innerHTML = svg;
+      ribbonEl.innerHTML = svg;
     }
 
     // Render transactions list
@@ -362,13 +378,12 @@
       document.getElementById('btn-add-jama').addEventListener('click', () => {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('jama-date').value = today;
-        document.getElementById('modal-add-jama').hidden = false;
-        document.getElementById('jama-amount').focus();
+        openModal(document.getElementById('modal-add-jama'));
       });
 
       // Cancel add jama modal
       document.getElementById('btn-cancel-jama').addEventListener('click', () => {
-        document.getElementById('modal-add-jama').hidden = true;
+        closeModal(document.getElementById('modal-add-jama'));
         document.getElementById('form-add-jama').reset();
       });
 
@@ -388,7 +403,7 @@
           showLoading('Adding transaction…');
           await addTransaction(db, partyId, 'jama', amount, date, note || null, 'manual');
           hideLoading();
-          document.getElementById('modal-add-jama').hidden = true;
+          closeModal(document.getElementById('modal-add-jama'));
           document.getElementById('form-add-jama').reset();
           await loadPartyData();
         } catch (err) {
@@ -401,13 +416,12 @@
       document.getElementById('btn-add-udhar').addEventListener('click', () => {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('udhar-date').value = today;
-        document.getElementById('modal-add-udhar').hidden = false;
-        document.getElementById('udhar-amount').focus();
+        openModal(document.getElementById('modal-add-udhar'));
       });
 
       // Cancel add udhar modal
       document.getElementById('btn-cancel-udhar').addEventListener('click', () => {
-        document.getElementById('modal-add-udhar').hidden = true;
+        closeModal(document.getElementById('modal-add-udhar'));
         document.getElementById('form-add-udhar').reset();
       });
 
@@ -427,7 +441,7 @@
           showLoading('Adding transaction…');
           await addTransaction(db, partyId, 'udhar', amount, date, note || null, 'manual');
           hideLoading();
-          document.getElementById('modal-add-udhar').hidden = true;
+          closeModal(document.getElementById('modal-add-udhar'));
           document.getElementById('form-add-udhar').reset();
           await loadPartyData();
         } catch (err) {

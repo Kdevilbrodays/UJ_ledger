@@ -5,7 +5,9 @@
   --color-surface:    #ffffff;
   --color-ink:        #141413;
   --color-ink-muted:  #6b6b68;
-  --color-border:     #e8e5de;
+  --color-border:     #ddd8cc; /* darkened from #e8e5de (1.19:1) to ~1.4:1 against
+                                   --color-bg — still a subtle hairline, but visible
+                                   in high-glare/outdoor conditions. See Phase 6 audit 2.6. */
   --color-accent:     #d97757;
   --color-accent-dim: #f0e0d8;
   --color-jama:       #6a9bcc;
@@ -14,6 +16,15 @@
   --color-udhar-dim:  #e4ebda;
   --color-danger:      #c0524a;
   --color-danger-dim:  #f6e2df;
+
+  /* Text-safe variants: same hue family as the tokens above, darkened until
+     they clear WCAG AA (4.5:1) for normal text on both white/cream surfaces
+     and on the *-dim tint backgrounds. Use these for text; keep the original
+     tokens for borders, icons, decorative fills, and other non-text use,
+     which don't need to meet text contrast minimums. */
+  --color-accent-strong: #ba4d2a; /* white text on this = 5.02:1 */
+  --color-jama-text:     #336596; /* on white = 6.10:1, on --color-jama-dim = 4.99:1 */
+  --color-udhar-text:    #546241; /* on white = 6.56:1, on --color-udhar-dim = 5.37:1 */
 
   --font-display: 'DM Serif Display', Georgia, serif;
   --font-body:    'DM Serif Text', Georgia, serif;

@@ -48,9 +48,9 @@
           <span class="settings-row__label">Export backup</span>
           <button class="btn btn--primary" id="btn-download-backup">Download Backup</button>
         </div>
-        <div class="settings-row">
-          <span class="settings-row__label">Manage parties</span>
-          <div class="settings-row__control" id="party-manage-list"></div>
+        <div class="settings-party-manager">
+          <div class="settings-party-manager__label">Manage parties</div>
+          <div id="party-manage-list" class="settings-party-list"></div>
         </div>
       </div>
 
@@ -144,16 +144,11 @@
         container.innerHTML = '';
         parties.forEach((party) => {
           const row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.alignItems = 'center';
-          row.style.gap = '0.75rem';
-          row.style.marginTop = '0.75rem';
+          row.className = 'settings-party-row';
 
           const name = document.createElement('span');
+          name.className = 'settings-party-row__name';
           name.textContent = party.name;
-          name.style.flex = '1';
-          name.style.fontFamily = 'var(--font-display)';
-          name.style.fontSize = '0.95rem';
 
           const button = document.createElement('button');
           button.className = 'btn btn--secondary';
@@ -171,12 +166,12 @@
     function openSingleDeleteModal(party) {
       deleteTarget = party;
       document.getElementById('single-delete-text').textContent = `Delete ${party.name} and all of their transactions? This can't be undone.`;
-      document.getElementById('single-delete-modal').hidden = false;
+      openModal(document.getElementById('single-delete-modal'), { closeOnOverlayClick: false });
     }
 
     function closeSingleDeleteModal() {
       deleteTarget = null;
-      document.getElementById('single-delete-modal').hidden = true;
+      closeModal(document.getElementById('single-delete-modal'));
     }
 
     async function setupEventListeners() {
@@ -202,11 +197,11 @@
         await refreshDangerCounts();
         document.getElementById('confirm-delete-input').value = '';
         document.getElementById('btn-confirm-clear').disabled = true;
-        document.getElementById('danger-modal').hidden = false;
+        openModal(document.getElementById('danger-modal'), { closeOnOverlayClick: false });
       });
 
       document.getElementById('btn-cancel-clear').addEventListener('click', () => {
-        document.getElementById('danger-modal').hidden = true;
+        closeModal(document.getElementById('danger-modal'));
       });
 
       document.getElementById('confirm-delete-input').addEventListener('input', (event) => {
@@ -218,7 +213,7 @@
           showLoading('Clearing all data…');
           await clearAllData(db);
           hideLoading();
-          document.getElementById('danger-modal').hidden = true;
+          closeModal(document.getElementById('danger-modal'));
           document.getElementById('success-banner').textContent = 'All data cleared.';
           document.getElementById('success-banner').hidden = false;
           setTimeout(() => {

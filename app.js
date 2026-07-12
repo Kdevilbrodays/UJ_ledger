@@ -76,14 +76,100 @@ function getParam(key) {
   return new URLSearchParams(window.location.search).get(key);
 }
 
+// --- Shared modal helpers -------------------------------------------------
+// Used by the nav drawer and by every task modal (Add Party, Add Jama, Add
+// Udhar, Delete confirmations, etc). One implementation of focus trapping,
+// Escape-to-close, and (optionally) click-outside-to-close, instead of a
+// separate copy per modal. See Phase 6 audit 2.4/2.5.
+
+const openModals = new Map(); // overlayEl -> { closeOnOverlayClick, previouslyFocused }
+
+function getFocusableElements(container) {
+  const focusable = container.querySelectorAll('button, [href], input, select, textarea');
+  return Array.from(focusable).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+}
+
+function openModal(overlayEl, options = {}) {
+  if (!overlayEl) return;
+
+  openModals.set(overlayEl, {
+    closeOnOverlayClick: options.closeOnOverlayClick !== false, // default true
+    previouslyFocused: document.activeElement,
+  });
+
+  overlayEl.hidden = false;
+
+  const focusable = getFocusableElements(overlayEl);
+  if (focusable.length) focusable[0].focus();
+
+  // Wire click-outside-to-close once per overlay, lazily.
+  if (!overlayEl.dataset.modalWired) {
+    overlayEl.dataset.modalWired = 'true';
+    overlayEl.addEventListener('click', (event) => {
+      const state = openModals.get(overlayEl);
+      if (event.target === overlayEl && state && state.closeOnOverlayClick) {
+        closeModal(overlayEl);
+      }
+    });
+  }
+}
+
+function closeModal(overlayEl) {
+  if (!overlayEl || overlayEl.hidden) return;
+  const state = openModals.get(overlayEl);
+  overlayEl.hidden = true;
+  openModals.delete(overlayEl);
+  if (state && state.previouslyFocused instanceof HTMLElement) {
+    state.previouslyFocused.focus();
+  }
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' && event.key !== 'Tab') return;
+  if (openModals.size === 0) return;
+
+  // Only the most-recently-opened modal should respond (in practice this
+  // app never stacks more than one, but this keeps behavior sane if it ever does).
+  const overlayEl = Array.from(openModals.keys()).pop();
+
+  if (event.key === 'Escape') {
+    closeModal(overlayEl);
+  } else if (event.key === 'Tab') {
+    trapModalFocus(overlayEl, event);
+  }
+});
+
+function trapModalFocus(overlayEl, event) {
+  const focusableElements = getFocusableElements(overlayEl);
+  if (!focusableElements.length) return;
+
+  const first = focusableElements[0];
+  const last = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+// --- Nav drawer ------------------------------------------------------------
+
 let navDrawerState = {
   trigger: null,
   overlay: null,
   drawer: null,
-  firstFocusable: null,
-  lastFocusable: null,
-  previouslyFocused: null,
 };
+
+function openNavDrawer() {
+  openModal(navDrawerState.overlay, { closeOnOverlayClick: true });
+}
+
+function closeNavDrawer() {
+  closeModal(navDrawerState.overlay);
+}
 
 function initNavDrawer(db, currentPage) {
   navDrawerState.trigger = document.getElementById('nav-trigger');
@@ -99,21 +185,6 @@ function initNavDrawer(db, currentPage) {
 
   const closeButton = document.getElementById('nav-drawer-close');
   closeButton?.addEventListener('click', closeNavDrawer);
-
-  navDrawerState.overlay.addEventListener('click', (event) => {
-    if (event.target === navDrawerState.overlay) {
-      closeNavDrawer();
-    }
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !navDrawerState.overlay.hidden) {
-      closeNavDrawer();
-    }
-    if (event.key === 'Tab' && !navDrawerState.overlay.hidden) {
-      trapNavDrawerFocus(event);
-    }
-  });
 
   navDrawerState.drawer.querySelectorAll('.nav-drawer__link').forEach((link) => {
     if (link.dataset.page === currentPage) {
@@ -147,23 +218,6 @@ function initNavDrawer(db, currentPage) {
   renderNavPartyList(db);
 }
 
-function trapNavDrawerFocus(event) {
-  const focusable = navDrawerState.drawer.querySelectorAll('button, [href], input, select, textarea');
-  if (!focusable.length) return;
-
-  const focusableElements = Array.from(focusable).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
-  navDrawerState.firstFocusable = focusableElements[0];
-  navDrawerState.lastFocusable = focusableElements[focusableElements.length - 1];
-
-  if (event.shiftKey && document.activeElement === navDrawerState.firstFocusable) {
-    event.preventDefault();
-    navDrawerState.lastFocusable.focus();
-  } else if (!event.shiftKey && document.activeElement === navDrawerState.lastFocusable) {
-    event.preventDefault();
-    navDrawerState.firstFocusable.focus();
-  }
-}
-
 async function renderNavPartyList(db) {
   const partyListEl = document.getElementById('nav-party-list');
   const searchValue = document.getElementById('nav-party-search')?.value.trim().toLowerCase() || '';
@@ -195,22 +249,6 @@ async function renderNavPartyList(db) {
     });
   } catch (err) {
     showError('Failed to load menu parties: ' + err.message);
-  }
-}
-
-function openNavDrawer() {
-  if (!navDrawerState.overlay) return;
-  navDrawerState.previouslyFocused = document.activeElement;
-  navDrawerState.overlay.hidden = false;
-  const focusable = navDrawerState.drawer.querySelectorAll('button, [href], input, select, textarea');
-  if (focusable.length) focusable[0].focus();
-}
-
-function closeNavDrawer() {
-  if (!navDrawerState.overlay) return;
-  navDrawerState.overlay.hidden = true;
-  if (navDrawerState.previouslyFocused instanceof HTMLElement) {
-    navDrawerState.previouslyFocused.focus();
   }
 }
 
