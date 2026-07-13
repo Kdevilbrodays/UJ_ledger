@@ -12,7 +12,10 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.nav-trigger {
+/* Shared 44x44 header icon-button ruleset. .nav-trigger, .nav-drawer__close,
+   the search-trigger, and the kebab-trigger all compose this instead of each
+   repeating the same declaration — see Phase 7. */
+.icon-btn {
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -24,13 +27,17 @@
   background: transparent;
   color: var(--color-ink);
   border: 1px solid transparent;
-  transition: border-color var(--transition), background-color var(--transition);
 }
 
-.nav-trigger:hover,
-.nav-trigger:focus {
+.icon-btn:hover,
+.icon-btn:focus {
   background: var(--color-accent-dim);
   border-color: var(--color-border);
+}
+
+/* .nav-trigger kept as a marker class (existing JS/tests may target it) —
+   all its styling now comes from .icon-btn. */
+.nav-trigger {
 }
 
 .app-header__title {
@@ -38,6 +45,11 @@
   font-size: 1.25rem;
   font-weight: 400;
   color: var(--color-ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-header__action {
@@ -86,16 +98,8 @@
   margin-bottom: var(--space-lg);
 }
 
+/* .nav-drawer__close kept as a marker class — styling comes from .icon-btn. */
 .nav-drawer__close {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--color-ink);
 }
 
 .nav-drawer__section {
@@ -134,39 +138,97 @@
   background: var(--color-accent-dim);
 }
 
-.nav-drawer__party-list {
-  display: grid;
-  gap: var(--space-sm);
+/* Party Search overlay — global search reachable from a 🔍 icon on every
+   page's header, replacing the old drawer "Jump to a ledger" section. See
+   Phase 7. */
+.party-search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 350; /* above nav-drawer's 300 */
+  background: rgba(20, 20, 19, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
-.nav-drawer__party-item {
+.party-search-overlay[hidden] { display: none; }
+
+.party-search-panel {
+  width: 100%;
+  height: 100%;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  animation: fadeUp 0.2s ease;
+}
+
+.party-search-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.party-search-panel__input { flex: 1; }
+
+.party-search-panel__results {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+@media (min-width: 640px) {
+  .party-search-overlay { padding-top: 10vh; }
+  .party-search-panel {
+    width: 100%;
+    max-width: 560px;
+    height: auto;
+    max-height: 70vh;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-box);
+  }
+}
+
+/* Party Search result rows — the visual language that used to live in
+   .nav-drawer__party-*, renamed since results no longer live in the drawer.
+   Balance coloring reuses .party-card__balance--positive/--negative/--zero
+   directly rather than redefining those colors a third time. */
+.party-search__result-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.party-search__result {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-sm);
+  gap: var(--space-md);
+  min-height: 56px;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-ink);
 }
 
-.nav-drawer__party-item:hover,
-.nav-drawer__party-item:focus {
+.party-search__result:hover,
+.party-search__result:focus {
   background: var(--color-accent-dim);
 }
 
-.nav-drawer__party-name {
+.party-search__result-name {
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.nav-drawer__party-balance {
+.party-search__result-balance {
   font-family: var(--font-mono);
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .page-content {

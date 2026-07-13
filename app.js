@@ -203,53 +203,103 @@ function initNavDrawer(db, currentPage) {
       });
     }
   });
-
-  const searchInput = document.getElementById('nav-party-search');
-  searchInput?.addEventListener('keyup', () => renderNavPartyList(db));
-
-  navDrawerState.drawer.querySelector('#nav-party-list')?.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-party-id]');
-    if (item) {
-      const partyId = item.dataset.partyId;
-      window.location.href = `party.html?id=${partyId}`;
-    }
-  });
-
-  renderNavPartyList(db);
 }
 
-async function renderNavPartyList(db) {
-  const partyListEl = document.getElementById('nav-party-list');
-  const searchValue = document.getElementById('nav-party-search')?.value.trim().toLowerCase() || '';
-  if (!partyListEl) return;
+// --- Party Search (global) --------------------------------------------------
+// A dedicated overlay reachable from a 🔍 icon in the header on every page,
+// with real fuzzy matching via Fuse.js. Replaces the old "Jump to a ledger"
+// section that used to live inside the nav-drawer. See Phase 7.
 
-  try {
-    const parties = await getAllParties(db);
-    const filtered = parties.filter((party) => party.name.toLowerCase().includes(searchValue));
+let partySearchState = { fuse: null, parties: [] };
 
-    partyListEl.innerHTML = '';
-    filtered.forEach((party) => {
-      const balance = party.current_balance || 0;
-      const balanceClass = balance > 0 ? 'party-card__balance--positive' : balance < 0 ? 'party-card__balance--negative' : '';
-      const item = document.createElement('a');
-      item.href = `party.html?id=${party.id}`;
-      item.dataset.partyId = party.id;
-      item.className = 'nav-drawer__party-item';
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'nav-drawer__party-name';
-      nameSpan.textContent = party.name;
+async function launchPartySearch(db) {
+  partySearchState.parties = await getAllParties(db);
+  partySearchState.fuse = new Fuse(partySearchState.parties, {
+    keys: ['name'],
+    threshold: 0.35,
+    ignoreLocation: true,
+    includeMatches: true,
+    minMatchCharLength: 1,
+  });
+  document.getElementById('party-search-input').value = '';
+  renderPartySearchResults('');
+  openModal(document.getElementById('party-search-overlay'));
+}
 
-      const balanceSpan = document.createElement('span');
-      balanceSpan.className = `nav-drawer__party-balance ${balanceClass}`;
-      balanceSpan.textContent = formatCurrency(balance);
+function initPartySearch(db) {
+  document.getElementById('search-trigger')?.addEventListener('click', () => launchPartySearch(db));
+  document.getElementById('nav-drawer-search-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeNavDrawer();
+    launchPartySearch(db);
+  });
+  document.getElementById('party-search-close')?.addEventListener('click', () => {
+    closeModal(document.getElementById('party-search-overlay'));
+  });
+  document.getElementById('party-search-input')?.addEventListener('input', (e) => {
+    renderPartySearchResults(e.target.value);
+  });
+  document.getElementById('party-search-results')?.addEventListener('click', (event) => {
+    const row = event.target.closest('[data-party-id]');
+    if (row) window.location.href = `party.html?id=${row.dataset.partyId}`;
+  });
+}
 
-      item.append(nameSpan, balanceSpan);
-      partyListEl.appendChild(item);
-    });
-  } catch (err) {
-    showError('Failed to load menu parties: ' + err.message);
-  }
+function renderPartySearchResults(query) {
+  const listEl = document.getElementById('party-search-results');
+  const emptyEl = document.getElementById('party-search-empty');
+  const trimmed = query.trim();
+
+  const results = trimmed
+    ? partySearchState.fuse.search(trimmed)
+    : [...partySearchState.parties]
+        .sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0))
+        .map((party) => ({ item: party, matches: [] }));
+
+  listEl.innerHTML = '';
+  emptyEl.hidden = results.length > 0;
+  if (!results.length) emptyEl.querySelector('p').textContent = `No match for '${trimmed}'.`;
+
+  results.forEach(({ item: party, matches }) => listEl.appendChild(createPartySearchRow(party, matches)));
+}
+
+function createPartySearchRow(party, matches) {
+  const row = document.createElement('a');
+  row.href = `party.html?id=${party.id}`;
+  row.dataset.partyId = party.id;
+  row.className = 'party-search__result';
+
+  const nameMatch = (matches || []).find((m) => m.key === 'name');
+  const nameEl = document.createElement('span');
+  nameEl.className = 'party-search__result-name';
+  nameEl.innerHTML = nameMatch ? highlightIndices(party.name, nameMatch.indices) : escapeHtml(party.name);
+
+  const balance = party.current_balance || 0;
+  const balanceClass = balance > 0 ? 'party-card__balance--positive' : balance < 0 ? 'party-card__balance--negative' : 'party-card__balance--zero';
+  const balanceEl = document.createElement('span');
+  balanceEl.className = `party-search__result-balance ${balanceClass}`;
+  balanceEl.textContent = formatCurrency(balance);
+
+  row.append(nameEl, balanceEl);
+  return row;
+}
+
+function highlightIndices(name, indices) {
+  let out = '';
+  let cursor = 0;
+  indices.forEach(([start, end]) => {
+    out += escapeHtml(name.slice(cursor, start));
+    out += `<span class="fuzzy-highlight">${escapeHtml(name.slice(start, end + 1))}</span>`;
+    cursor = end + 1;
+  });
+  out += escapeHtml(name.slice(cursor));
+  return out;
 }
 
 // Offline handling

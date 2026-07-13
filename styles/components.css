@@ -84,42 +84,6 @@
   margin-left: auto;
 }
 
-/* Manage parties: a heading above a variable-length list, not a single
-   label+control row — see Phase 6 audit 1.7. Intentionally not a
-   .settings-row, so the label doesn't vertically center against the whole
-   list and long names can wrap without competing with align-items:center. */
-.settings-party-manager {
-  padding: var(--space-sm) 0;
-}
-
-.settings-party-manager__label {
-  font-family: var(--font-ui);
-  font-size: 0.95rem;
-  color: var(--color-ink);
-  margin-bottom: var(--space-sm);
-}
-
-.settings-party-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.settings-party-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.settings-party-row__name {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  overflow-wrap: break-word;
-}
-
 .settings-section--danger {
   border-left: 3px solid var(--color-danger);
   background: var(--color-danger-dim);
@@ -537,7 +501,69 @@
   font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 400;
-  margin-bottom: var(--space-lg);
   color: var(--color-ink);
   line-height: 1.2;
+}
+
+/* Wraps the party-title <h1> and the new ⋮ overflow trigger. Delete moves
+   here from settings.html — close to the record it affects, not a page-away
+   in a global settings screen. See Phase 7. */
+.party-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.kebab-menu-wrapper {
+  position: relative;
+}
+
+.kebab-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-box);
+  z-index: 150;
+  overflow: hidden;
+}
+
+.kebab-menu[hidden] {
+  display: none;
+}
+
+.kebab-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+}
+
+.kebab-menu__item:hover,
+.kebab-menu__item:focus {
+  background: var(--color-accent-dim);
+}
+
+/* Visually distinct, isolated item — not styled like a neutral menu row, per
+   NN/G guidance on dangerous-action proximity. */
+.kebab-menu__item--danger {
+  color: var(--color-danger);
+}
+
+/* Fuzzy-match highlight in Party Search results. Uses the text-safe accent
+   variant (already defined above for exactly this reason — it clears WCAG AA
+   where the raw --color-accent token doesn't), not --color-accent directly. */
+.fuzzy-highlight {
+  color: var(--color-accent-strong);
+  font-weight: 600;
 }

@@ -13,35 +13,6 @@
       animation: fadeUp 0.3s ease;
     }
 
-    .scan-page__header {
-      display: flex;
-      align-items: center;
-      gap: var(--space-md);
-      margin-bottom: var(--space-lg);
-      padding-bottom: var(--space-md);
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .scan-page__back {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1.5rem;
-      color: var(--color-ink);
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 44px;
-      height: 44px;
-    }
-
-    .scan-page__title {
-      font-family: var(--font-display);
-      font-size: 1.5rem;
-      flex: 1;
-    }
-
     /* Image Upload Section */
     .upload-section {
       margin-bottom: var(--space-lg);
@@ -142,8 +113,9 @@
 
     .image-preview__image {
       width: 100%;
+      aspect-ratio: 4 / 3;
       max-height: 60vh;
-      object-fit: contain;
+      object-fit: cover;
       background: var(--color-bg);
       border-radius: var(--radius-md);
       border: 1px solid var(--color-border);
@@ -416,14 +388,6 @@
         padding: var(--space-md);
       }
 
-      .entry-row {
-        flex-wrap: wrap;
-      }
-
-      .entry-row__amount {
-        width: 100%;
-      }
-
       .upload-box {
         padding: var(--space-md);
       }
@@ -439,12 +403,60 @@
   </style>
 </head>
 <body>
+  <div class="nav-drawer-overlay" id="nav-drawer-overlay" hidden>
+    <nav class="nav-drawer" id="nav-drawer" aria-label="Main navigation">
+      <div class="nav-drawer__header">
+        <span class="app-header__title">Udhar Ledger</span>
+        <button class="icon-btn nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="index.html" class="nav-drawer__link" data-page="index">🏠 All Parties</a>
+        <a href="#" class="nav-drawer__link" id="nav-drawer-search-link">🔍 Find a Party</a>
+        <a href="scan.html" class="nav-drawer__link" data-page="scan">📷 Scan Diary Page</a>
+        <a href="index.html?action=add-party" class="nav-drawer__link">➕ Add New Party</a>
+      </div>
+
+      <div class="nav-drawer__section">
+        <a href="settings.html" class="nav-drawer__link" data-page="settings">⚙️ Settings</a>
+      </div>
+    </nav>
+  </div>
+
+  <div class="party-search-overlay" id="party-search-overlay" hidden>
+    <div class="party-search-panel" role="dialog" aria-modal="true" aria-label="Find a party">
+      <div class="party-search-panel__header">
+        <button class="icon-btn" id="party-search-close" aria-label="Close search">←</button>
+        <input
+          type="text"
+          id="party-search-input"
+          class="form-input party-search-panel__input"
+          placeholder="🔍 Find a party..."
+          aria-label="Find a party by name"
+        >
+      </div>
+      <div class="party-search-panel__results">
+        <div id="party-search-results" class="party-search__result-list"></div>
+        <div id="party-search-empty" class="empty-state" hidden>
+          <p>No match for '[query]'.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <header class="app-header">
+    <button class="icon-btn nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
     <div class="app-header__title">Scan Diary Page</div>
-    <button class="scan-page__back" id="btn-back" aria-label="Go back">←</button>
+    <button class="icon-btn" id="search-trigger" aria-label="Find a party">🔍</button>
   </header>
 
   <div class="page-shell">
+    <nav class="back-nav">
+      <button class="back-nav__link" id="btn-back">
+        <span>←</span> <span>All Parties</span>
+      </button>
+    </nav>
+
     <div class="page-content scan-page">
       <!-- Error Banner -->
       <div id="error-banner" class="banner banner--error" hidden></div>
@@ -557,6 +569,7 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.4.1"></script>
   <script src="config.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>
@@ -585,6 +598,8 @@
     document.addEventListener('DOMContentLoaded', async () => {
       try {
         db = initSupabase();
+        initNavDrawer(db, 'scan');
+        initPartySearch(db);
 
         // Back button — if there's an in-progress scan (an uploaded image or
         // review entries not yet saved), confirm before discarding it rather

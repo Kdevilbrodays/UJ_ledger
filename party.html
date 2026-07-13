@@ -14,19 +14,14 @@
     <nav class="nav-drawer" id="nav-drawer" aria-label="Main navigation">
       <div class="nav-drawer__header">
         <span class="app-header__title">Udhar Ledger</span>
-        <button class="nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
+        <button class="icon-btn nav-drawer__close" id="nav-drawer-close" aria-label="Close menu">✕</button>
       </div>
 
       <div class="nav-drawer__section">
         <a href="index.html" class="nav-drawer__link" data-page="index">🏠 All Parties</a>
+        <a href="#" class="nav-drawer__link" id="nav-drawer-search-link">🔍 Find a Party</a>
         <a href="scan.html" class="nav-drawer__link" data-page="scan">📷 Scan Diary Page</a>
         <a href="index.html?action=add-party" class="nav-drawer__link">➕ Add New Party</a>
-      </div>
-
-      <div class="nav-drawer__section">
-        <div class="nav-drawer__section-label">Jump to a ledger</div>
-        <input type="text" id="nav-party-search" class="form-input" placeholder="🔍 Find a person..." aria-label="Find a party">
-        <div id="nav-party-list" class="nav-drawer__party-list"></div>
       </div>
 
       <div class="nav-drawer__section">
@@ -35,9 +30,31 @@
     </nav>
   </div>
 
+  <div class="party-search-overlay" id="party-search-overlay" hidden>
+    <div class="party-search-panel" role="dialog" aria-modal="true" aria-label="Find a party">
+      <div class="party-search-panel__header">
+        <button class="icon-btn" id="party-search-close" aria-label="Close search">←</button>
+        <input
+          type="text"
+          id="party-search-input"
+          class="form-input party-search-panel__input"
+          placeholder="🔍 Find a party..."
+          aria-label="Find a party by name"
+        >
+      </div>
+      <div class="party-search-panel__results">
+        <div id="party-search-results" class="party-search__result-list"></div>
+        <div id="party-search-empty" class="empty-state" hidden>
+          <p>No match for '[query]'.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <header class="app-header">
-    <button class="nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
+    <button class="icon-btn nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
     <div class="app-header__title">Party Ledger</div>
+    <button class="icon-btn" id="search-trigger" aria-label="Find a party">🔍</button>
   </header>
 
   <div class="page-shell page-shell--with-fab">
@@ -49,7 +66,15 @@
 
     <div class="page-content">
       <!-- Party Name as Title -->
-      <h1 class="party-title" id="party-title"></h1>
+      <div class="party-title-row">
+        <h1 class="party-title" id="party-title"></h1>
+        <div class="kebab-menu-wrapper">
+          <button class="icon-btn" id="party-menu-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Party options">⋮</button>
+          <div class="kebab-menu" id="party-menu" hidden role="menu" aria-label="Party options">
+            <button class="kebab-menu__item kebab-menu__item--danger" id="btn-delete-party" role="menuitem">🗑️ Delete Party</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Balance Summary -->
       <div id="balance-summary" class="balance-summary" style="display: none;">
@@ -176,7 +201,22 @@
     </div>
   </div>
 
+  <!-- Modal for confirming Delete Party — moved here from settings.html.
+       Scoped to one record, not the whole database, so a plain Cancel/Delete
+       choice is proportionate (no typed "DELETE" confirmation). -->
+  <div id="modal-delete-party" class="modal-overlay" hidden>
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="delete-party-title">
+      <h2 class="modal__title" id="delete-party-title">Delete Party</h2>
+      <p id="delete-party-text"></p>
+      <div class="modal__actions">
+        <button type="button" class="btn btn--secondary" id="btn-cancel-delete-party">Cancel</button>
+        <button type="button" class="btn btn--danger" id="btn-confirm-delete-party">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.4.1"></script>
   <script src="config.js"></script>
   <script src="supabase.js"></script>
   <script src="app.js"></script>
@@ -198,6 +238,7 @@
         db = initSupabase();
         await loadPartyData();
         initNavDrawer(db, 'party');
+        initPartySearch(db);
         setupEventListeners();
       } catch (err) {
         showError('Failed to initialize: ' + err.message);
@@ -449,6 +490,65 @@
           showError('Failed to add transaction: ' + err.message);
         }
       });
+
+      // Party options (⋮) menu
+      document.getElementById('party-menu-trigger').addEventListener('click', toggleKebabMenu);
+
+      // Delete Party
+      document.getElementById('btn-delete-party').addEventListener('click', () => {
+        closeKebabMenu();
+        document.getElementById('delete-party-text').textContent =
+          `Delete ${party.name} and all of their transactions? This can't be undone.`;
+        openModal(document.getElementById('modal-delete-party'));
+      });
+
+      document.getElementById('btn-cancel-delete-party').addEventListener('click', () => {
+        closeModal(document.getElementById('modal-delete-party'));
+      });
+
+      document.getElementById('btn-confirm-delete-party').addEventListener('click', async () => {
+        try {
+          showLoading('Deleting party…');
+          await deleteParty(db, partyId);
+          hideLoading();
+          window.location.href = 'index.html';
+        } catch (err) {
+          // Stay on the page with the modal open and the error visible —
+          // same pattern as the Add Jama/Udhar handlers above — rather than
+          // a silent redirect on a failed delete.
+          hideLoading();
+          showError('Failed to delete party: ' + err.message);
+        }
+      });
+    }
+
+    // Party options (⋮) menu — small, page-specific popover, not shared
+    // behavior, so it lives here rather than in app.js. Anchored to the
+    // party name it acts on, per Phase 7's dangerous-action-proximity notes.
+    function toggleKebabMenu() {
+      const menu = document.getElementById('party-menu');
+      menu.hidden ? openKebabMenu() : closeKebabMenu();
+    }
+    function openKebabMenu() {
+      const menu = document.getElementById('party-menu');
+      menu.hidden = false;
+      document.getElementById('party-menu-trigger').setAttribute('aria-expanded', 'true');
+      menu.querySelector('.kebab-menu__item').focus();
+      document.addEventListener('click', handleOutsideKebabClick);
+      document.addEventListener('keydown', handleKebabEscape);
+    }
+    function closeKebabMenu() {
+      const menu = document.getElementById('party-menu');
+      menu.hidden = true;
+      document.getElementById('party-menu-trigger').setAttribute('aria-expanded', 'false');
+      document.removeEventListener('click', handleOutsideKebabClick);
+      document.removeEventListener('keydown', handleKebabEscape);
+    }
+    function handleOutsideKebabClick(e) {
+      if (!e.target.closest('.kebab-menu-wrapper')) closeKebabMenu();
+    }
+    function handleKebabEscape(e) {
+      if (e.key === 'Escape') { closeKebabMenu(); document.getElementById('party-menu-trigger').focus(); }
     }
 
     // Initialize on page load
