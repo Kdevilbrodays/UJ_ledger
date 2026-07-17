@@ -76,6 +76,41 @@ function getParam(key) {
   return new URLSearchParams(window.location.search).get(key);
 }
 
+// --- Toast (Android-style) --------------------------------------------------
+// A brief, self-dismissing message pinned near the bottom of the screen.
+// Used for background events worth noticing but not acting on — e.g. an
+// automatic AI model switch during a scan. Unlike showError/showLoading,
+// a toast never blocks interaction and clears itself.
+
+let toastHideTimeout = null;
+
+function showToast(message, options = {}) {
+  const duration = options.duration || 3500;
+
+  let toast = document.getElementById('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.className = 'toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toast);
+  }
+
+  clearTimeout(toastHideTimeout);
+  toast.textContent = message;
+
+  // Restart the fade-in even if a toast is already showing (re-triggering
+  // quickly should refresh the timer, not just extend the old one).
+  toast.classList.remove('toast--visible');
+  void toast.offsetWidth; // force reflow so the transition replays
+  toast.classList.add('toast--visible');
+
+  toastHideTimeout = setTimeout(() => {
+    toast.classList.remove('toast--visible');
+  }, duration);
+}
+
 // --- Shared modal helpers -------------------------------------------------
 // Used by the nav drawer and by every task modal (Add Party, Add Jama, Add
 // Udhar, Delete confirmations, etc). One implementation of focus trapping,

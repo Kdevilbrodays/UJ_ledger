@@ -306,3 +306,64 @@ async function exportAllData(db) {
   }
   return { exported_at: new Date().toISOString(), parties, transactions };
 }
+
+// Counts what's in a parsed backup file without writing anything, so the
+// Settings screen can show "this will add N parties and M transactions"
+// before the user confirms the import.
+function previewBackupData(backupData) {
+  if (!backupData || typeof backupData !== 'object' || !Array.isArray(backupData.parties) || !Array.isArray(backupData.transactions)) {
+    throw new Error("This doesn't look like a Udhar Ledger backup file.");
+  }
+  return { parties: backupData.parties.length, transactions: backupData.transactions.length };
+}
+
+// Restores parties + transactions from a backup produced by exportAllData().
+// This ADDS the backup's parties/transactions as new records alongside
+// whatever's already in the database (it doesn't touch or overwrite
+// existing data) — party IDs from the backup are remapped to freshly
+// created IDs, since the originals belong to whichever database they were
+// exported from.
+async function importBackupData(db, backupData) {
+  previewBackupData(backupData); // throws if the shape is wrong
+
+  const idMap = new Map(); // backup party id -> newly created party id
+  let importedParties = 0;
+  let importedTransactions = 0;
+
+  for (const party of backupData.parties) {
+    if (!party || typeof party.name !== 'string' || !party.name.trim()) continue;
+    const newId = await addParty(db, party.name.trim(), party.phone || null);
+    idMap.set(party.id, newId);
+    importedParties++;
+  }
+
+  for (const txn of backupData.transactions) {
+    if (!txn) continue;
+    const newPartyId = idMap.get(txn.party_id);
+    if (!newPartyId) continue; // orphaned transaction — its party wasn't imported
+    if (txn.type !== 'jama' && txn.type !== 'udhar') continue;
+    if (typeof txn.amount !== 'number' || !(txn.amount > 0)) continue;
+    if (typeof txn.date !== 'string' || !txn.date) continue;
+
+    // 'source' has a DB check constraint of ('manual','scan') — anything
+    // else from the backup (or missing) falls back to 'manual'.
+    const source = txn.source === 'scan' ? 'scan' : 'manual';
+
+    const { error } = await db.from('transactions').insert({
+      party_id: newPartyId,
+      type: txn.type,
+      amount: txn.amount,
+      date: txn.date,
+      note: txn.note || null,
+      source
+    });
+    if (error) throw error;
+    importedTransactions++;
+  }
+
+  for (const newId of idMap.values()) {
+    await recalculateBalance(db, newId);
+  }
+
+  return { parties: importedParties, transactions: importedTransactions };
+}

@@ -1,13 +1,138 @@
+// --- Model fallback ---------------------------------------------------
+// Gemini occasionally returns a 503 "high demand" error on the default
+// scanning model. When that happens, switch to a secondary model for about
+// an hour, then automatically revert to the default. State lives in
+// localStorage so the switch survives navigating away from scan.html.
+
+const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash';
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-pro';
+const GEMINI_FALLBACK_DURATION_MS = 60 * 60 * 1000; // ~1 hour
+const GEMINI_MODEL_STATE_KEY = 'gemini_model_state';
+
+// Substring match (case-insensitive) on Gemini's overload message, so small
+// wording tweaks on Google's side don't silently break the fallback:
+// "This model is currently experiencing high demand. Spikes in demand are
+// usually temporary. Please try again later."
+const GEMINI_HIGH_DEMAND_SNIPPET = 'currently experiencing high demand';
+
+function isHighDemandError(status, message) {
+  return status === 503 && typeof message === 'string' && message.toLowerCase().includes(GEMINI_HIGH_DEMAND_SNIPPET);
+}
+
+// Reads which model should be used right now, silently reverting to the
+// default if a previously-activated fallback window has expired.
+function getGeminiModelState() {
+  let state = null;
+  try {
+    state = JSON.parse(localStorage.getItem(GEMINI_MODEL_STATE_KEY));
+  } catch (e) {
+    state = null;
+  }
+
+  if (state && state.model === GEMINI_FALLBACK_MODEL && state.revertAt) {
+    if (Date.now() >= state.revertAt) {
+      localStorage.removeItem(GEMINI_MODEL_STATE_KEY);
+      return { model: GEMINI_DEFAULT_MODEL };
+    }
+    return state;
+  }
+
+  return { model: GEMINI_DEFAULT_MODEL };
+}
+
+function activateGeminiFallbackModel() {
+  const state = {
+    model: GEMINI_FALLBACK_MODEL,
+    revertAt: Date.now() + GEMINI_FALLBACK_DURATION_MS
+  };
+  localStorage.setItem(GEMINI_MODEL_STATE_KEY, JSON.stringify(state));
+
+  if (typeof showToast === 'function') {
+    showToast(`${GEMINI_DEFAULT_MODEL} is experiencing high demand — switched to ${GEMINI_FALLBACK_MODEL} for about an hour.`);
+  }
+
+  scheduleGeminiFallbackRevert();
+}
+
+// If the fallback is currently active, arm a timer so that a page left open
+// past the hour mark reverts (and notifies) live instead of only on the
+// next scan attempt. Safe to call repeatedly (e.g. on every page load).
+let geminiRevertTimeoutId = null;
+function scheduleGeminiFallbackRevert() {
+  clearTimeout(geminiRevertTimeoutId);
+
+  const state = getGeminiModelState();
+  if (state.model !== GEMINI_FALLBACK_MODEL || !state.revertAt) return;
+
+  const msRemaining = Math.max(0, state.revertAt - Date.now());
+  geminiRevertTimeoutId = setTimeout(() => {
+    const stillActive = getGeminiModelState(); // clears state if expired
+    if (stillActive.model === GEMINI_DEFAULT_MODEL && typeof showToast === 'function') {
+      showToast(`Back to ${GEMINI_DEFAULT_MODEL} for scanning.`);
+    }
+  }, msRemaining);
+}
+
+// Calls the Gemini API with a specific model, isolating the timeout/network
+// handling from the fallback-retry logic in scanDiaryPage().
+async function callGeminiModel(model, payload, timeoutMs) {
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': CONFIG.GEMINI_API_KEY
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorData = {};
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // Error body wasn't JSON — fall through with an empty errorData.
+      }
+      const message = errorData.error?.message || 'Unknown error';
+      const err = new Error(`Gemini API error: ${message}`);
+      err.status = response.status;
+      err.isHighDemand = isHighDemandError(response.status, message);
+      throw err;
+    }
+
+    const data = await response.json();
+
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('Invalid response structure from Gemini API');
+    }
+
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Scan timed out — check your connection and try again.');
+    }
+    throw error;
+  }
+}
+
 /**
- * Scan a handwritten diary page using Gemini 3.5 Flash
+ * Scan a handwritten diary page using Gemini (gemini-3.5-flash by default,
+ * automatically falling back to gemini-2.5-pro for about an hour if the
+ * default model reports it's overloaded).
  * Returns parsed Jama and Udhar entries from the image
  */
 async function scanDiaryPage(imageBase64, mimeType) {
   if (!CONFIG.GEMINI_API_KEY) {
     throw new Error('Gemini API key is not configured');
   }
-
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent`;
 
   const prompt = `You are reading a photograph of a single handwritten Indian business ledger diary page.
 
@@ -53,30 +178,24 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
   // indefinitely — no error, no timeout, just the loading shimmer forever.
   // Aborting after 45s turns that into a clear, recoverable error instead.
   const REQUEST_TIMEOUT_MS = 45000;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': CONFIG.GEMINI_API_KEY
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+    const modelState = getGeminiModelState();
+    let data;
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Gemini API error: ${errorData.error?.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-      throw new Error('Invalid response structure from Gemini API');
+    try {
+      data = await callGeminiModel(modelState.model, payload, REQUEST_TIMEOUT_MS);
+    } catch (error) {
+      if (error.isHighDemand && modelState.model !== GEMINI_FALLBACK_MODEL) {
+        // Default model is overloaded — switch and retry once, transparently.
+        activateGeminiFallbackModel();
+        data = await callGeminiModel(GEMINI_FALLBACK_MODEL, payload, REQUEST_TIMEOUT_MS);
+      } else if (error.isHighDemand) {
+        // Already on the fallback model and it's overloaded too.
+        throw new Error('Both the default and fallback Gemini models are currently overloaded. Please try again shortly.');
+      } else {
+        throw error;
+      }
     }
 
     const responseText = data.candidates[0].content.parts[0].text;
@@ -138,10 +257,8 @@ Convert all amounts to integers. Never invent entries not visible in the image.`
       error: parsed.error || null
     };
   } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Scan timed out — check your connection and try again.');
-    }
+    // Timeouts are already converted to a friendly message inside
+    // callGeminiModel(), so nothing extra to translate here.
     throw error;
   }
 }

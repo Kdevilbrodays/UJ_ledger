@@ -65,6 +65,11 @@
           <span class="settings-row__label">Export backup</span>
           <button class="btn btn--primary" id="btn-download-backup">Download Backup</button>
         </div>
+        <div class="settings-row">
+          <span class="settings-row__label">Import backup</span>
+          <button class="btn btn--secondary" id="btn-import-backup">Choose File…</button>
+          <input type="file" id="import-backup-input" accept="application/json,.json" hidden>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -75,7 +80,7 @@
         </div>
         <div class="settings-row">
           <span class="settings-row__label">Platform</span>
-          <span>Plain HTML + CSS + vanilla JS · Supabase · Gemini 1.5 Flash</span>
+          <span>Plain HTML + CSS + vanilla JS · Supabase · Gemini 3.5 Flash (auto-fallback to 2.5 Pro)</span>
         </div>
         <div class="settings-row">
           <span class="settings-row__label">Connection</span>
@@ -88,6 +93,18 @@
         <div class="settings-row">
           <span class="settings-row__label">Clear all data</span>
           <button class="btn btn--danger" id="btn-clear-all">Clear All Data</button>
+        </div>
+      </div>
+
+      <div id="import-modal" class="modal-overlay" hidden>
+        <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+          <h2 class="modal__title" id="import-modal-title">Import Backup</h2>
+          <p id="import-modal-summary"></p>
+          <p style="margin-top: var(--space-md); color: var(--color-ink-muted);">This adds the backup's parties and transactions to what's already here — it won't delete or overwrite anything.</p>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--secondary" id="btn-cancel-import">Cancel</button>
+            <button type="button" class="btn btn--primary" id="btn-confirm-import">Import</button>
+          </div>
         </div>
       </div>
 
@@ -155,6 +172,56 @@
           URL.revokeObjectURL(url);
         } catch (err) {
           showError('Failed to export backup: ' + err.message);
+        }
+      });
+
+      let pendingImportData = null;
+
+      document.getElementById('btn-import-backup').addEventListener('click', () => {
+        document.getElementById('import-backup-input').value = '';
+        document.getElementById('import-backup-input').click();
+      });
+
+      document.getElementById('import-backup-input').addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return; // user cancelled the picker
+
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const counts = previewBackupData(parsed); // throws if the shape is wrong
+
+          pendingImportData = parsed;
+          document.getElementById('import-modal-summary').textContent =
+            `This backup has ${counts.parties} ${counts.parties === 1 ? 'party' : 'parties'} and ${counts.transactions} ${counts.transactions === 1 ? 'transaction' : 'transactions'}.`;
+          openModal(document.getElementById('import-modal'), { closeOnOverlayClick: false });
+        } catch (err) {
+          showError('Could not read that backup file: ' + err.message);
+        }
+      });
+
+      document.getElementById('btn-cancel-import').addEventListener('click', () => {
+        pendingImportData = null;
+        closeModal(document.getElementById('import-modal'));
+      });
+
+      document.getElementById('btn-confirm-import').addEventListener('click', async () => {
+        if (!pendingImportData) return;
+        try {
+          closeModal(document.getElementById('import-modal'));
+          showLoading('Importing backup…');
+          const result = await importBackupData(db, pendingImportData);
+          pendingImportData = null;
+          hideLoading();
+          showToast(`Imported ${result.parties} ${result.parties === 1 ? 'party' : 'parties'} and ${result.transactions} ${result.transactions === 1 ? 'transaction' : 'transactions'}.`);
+          document.getElementById('success-banner').textContent = 'Backup imported successfully.';
+          document.getElementById('success-banner').hidden = false;
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 1500);
+        } catch (err) {
+          hideLoading();
+          showError('Failed to import backup: ' + err.message);
         }
       });
 

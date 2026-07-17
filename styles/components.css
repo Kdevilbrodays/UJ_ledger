@@ -423,6 +423,35 @@
   border: 1px solid var(--color-jama);
 }
 
+/* Toast (Android-style): brief, self-dismissing status message pinned near
+   the bottom of the screen. Sits above modals so it stays visible even if
+   triggered while a dialog is open. See showToast() in app.js. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateX(-50%) translateY(16px);
+  max-width: calc(100% - var(--space-lg) * 2);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(20, 20, 19, 0.92);
+  color: var(--color-bg);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: center;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-box);
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Loading state: shimmer + status text shown while a page-local task (e.g.
    scanning a diary page) is in progress. This lived as a shadow copy in
    scan.html's local <style> block; consolidated here since it's the same

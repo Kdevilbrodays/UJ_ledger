@@ -601,6 +601,11 @@
         initNavDrawer(db, 'scan');
         initPartySearch(db);
 
+        // If a Gemini model fallback (see gemini.js) is still active from an
+        // earlier scan, re-arm its revert timer so this page notices the
+        // hour elapsing while it's open, instead of only on the next scan.
+        scheduleGeminiFallbackRevert();
+
         // Back button — if there's an in-progress scan (an uploaded image or
         // review entries not yet saved), confirm before discarding it rather
         // than navigating away silently. See Phase 6 audit 1.6.
