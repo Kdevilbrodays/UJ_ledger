@@ -358,6 +358,10 @@
       let isPressing = false;
 
       const startPress = (e) => {
+        // Prevent context menu from appearing
+        e.preventDefault();
+        e.stopPropagation();
+
         isPressing = true;
         pressTimer = setTimeout(() => {
           enterEditMode();
@@ -369,10 +373,10 @@
         clearTimeout(pressTimer);
       };
 
-      card.addEventListener('touchstart', startPress);
+      card.addEventListener('touchstart', startPress, { passive: false });
       card.addEventListener('touchend', endPress);
       card.addEventListener('touchcancel', endPress);
-      card.addEventListener('mousedown', startPress);
+      card.addEventListener('mousedown', startPress, { passive: false });
       card.addEventListener('mouseup', endPress);
       card.addEventListener('mouseleave', endPress);
     }
