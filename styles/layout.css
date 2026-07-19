@@ -238,8 +238,7 @@
 }
 
 .page-content--edit-mode {
-  opacity: 0.6;
-  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .page-content--edit-mode .page-content__header {
