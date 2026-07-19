@@ -321,99 +321,70 @@
 
     // Add checkbox and delete button to existing card
     function addEditModeControls(card, partyId) {
-      // Remove existing controls if any (in case re-rendering)
+      // Remove any existing controls on the card
       const existingCheckbox = card.querySelector('.party-card__checkbox');
       const existingDeleteBtn = card.querySelector('.party-card__delete');
       if (existingCheckbox) existingCheckbox.remove();
       if (existingDeleteBtn) existingDeleteBtn.remove();
 
-      // Add checkbox
+      // Create checkbox
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.className = 'party-card__checkbox';
-      checkbox.dataset.partyId = partyId;
       checkbox.checked = selectedPartyIds.has(partyId);
 
-      // Use click event for better cross-browser compatibility
+      // Add checkbox click handler
       checkbox.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent card click
-        console.log('Checkbox clicked for party:', partyId, 'checked:', e.target.checked);
         if (e.target.checked) {
           selectedPartyIds.add(partyId);
         } else {
           selectedPartyIds.delete(partyId);
         }
-        console.log('Selected parties:', Array.from(selectedPartyIds));
         updateHeaderState();
       });
       card.insertBefore(checkbox, card.firstChild);
 
-      // Add delete button
+      // Create delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'party-card__delete';
       deleteBtn.type = 'button';
       deleteBtn.ariaLabel = 'Delete party';
       deleteBtn.textContent = '✕';
 
-      // Use click event for better cross-browser compatibility
+      // Add delete button click handler
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent card click
-        console.log('Delete button clicked for party:', partyId);
         openDeleteModal(partyId);
       });
       card.appendChild(deleteBtn);
-
-      return { checkbox, deleteBtn };
     }
 
     // Long-press handler
     function addLongPressHandler(card, party) {
       let pressTimer;
-      const pressDuration = 500;
-      let isPressing = false;
-      let hasMoved = false;
 
       const startPress = (e) => {
-        hasMoved = false;
         // Prevent context menu from appearing
         e.preventDefault();
         e.stopPropagation();
 
-        isPressing = true;
         pressTimer = setTimeout(() => {
-          console.log('Long press detected, entering edit mode');
           enterEditMode();
-        }, pressDuration);
-      };
-
-      const movePress = (e) => {
-        hasMoved = true;
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-        }
+        }, 500);
       };
 
       const endPress = (e) => {
-        if (hasMoved) {
-          // User moved while pressing, don't enter edit mode
-          if (pressTimer) {
-            clearTimeout(pressTimer);
-          }
-          return;
-        }
-
-        isPressing = false;
         if (pressTimer) {
           clearTimeout(pressTimer);
+          pressTimer = null;
         }
       };
 
       card.addEventListener('touchstart', startPress, { passive: false });
-      card.addEventListener('touchmove', movePress, { passive: true });
       card.addEventListener('touchend', endPress);
       card.addEventListener('touchcancel', endPress);
       card.addEventListener('mousedown', startPress, { passive: false });
-      card.addEventListener('mousemove', movePress);
       card.addEventListener('mouseup', endPress);
       card.addEventListener('mouseleave', endPress);
     }
@@ -531,26 +502,6 @@
           renderParties();
         });
       }
-
-      // Global click handler for edit mode
-      document.addEventListener('click', (e) => {
-        if (isEditMode) {
-          // Check if clicking checkbox
-          if (e.target.classList && e.target.classList.contains('party-card__checkbox')) {
-            return; // Handled by checkbox event listener
-          }
-
-          // Check if clicking delete button
-          if (e.target.classList && e.target.classList.contains('party-card__delete')) {
-            return; // Handled by delete button event listener
-          }
-
-          // If not clicking card controls, exit edit mode
-          if (!e.target.closest('.party-card')) {
-            exitEditMode();
-          }
-        }
-      });
     }
 
     // Setup real-time subscription
