@@ -244,19 +244,20 @@
         filtered.forEach(party => {
           const card = createPartyCard(party);
           listEl.appendChild(card);
+          // Add edit mode controls if in edit mode
+          if (isEditMode) {
+            addEditModeControls(card, party.id);
+          }
         });
       }
     }
 
     // Create party card element
     function createPartyCard(party) {
-      const card = document.createElement('div');
+      const card = document.createElement('a');
+      card.href = `party.html?id=${party.id}`;
       card.className = 'card party-card';
       card.dataset.partyId = party.id;
-
-      if (isEditMode) {
-        card.classList.add('party-card--edit');
-      }
 
       const balance = party.current_balance || 0;
       const balanceClass = balance > 0 ? 'party-card__balance--positive' :
@@ -273,16 +274,6 @@
         lastActivityText = 'Last: Updated · ' + formatRelativeDate(lastDate);
       }
 
-      // Left side: checkbox
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'party-card__checkbox';
-      checkbox.dataset.partyId = party.id;
-      if (selectedPartyIds.has(party.id)) {
-        checkbox.checked = true;
-      }
-
-      // Middle: info
       const infoDiv = document.createElement('div');
       infoDiv.className = 'party-card__info';
 
@@ -296,47 +287,68 @@
 
       infoDiv.append(nameDiv, metaDiv);
 
-      // Right side: balance
       const balanceDiv = document.createElement('div');
       balanceDiv.className = `party-card__balance ${balanceClass}`;
       balanceDiv.textContent = formatCurrency(balance);
 
-      // Append to card
-      card.append(checkbox, infoDiv, balanceDiv);
-
-      // Add delete button (only in edit mode)
-      if (isEditMode) {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'party-card__delete';
-        deleteBtn.type = 'button';
-        deleteBtn.ariaLabel = 'Delete party';
-        deleteBtn.textContent = '✕';
-        card.appendChild(deleteBtn);
-      }
+      card.append(infoDiv, balanceDiv);
 
       // Add long-press listener
       addLongPressHandler(card, party);
 
-      // Add checkbox change handler
+      return card;
+    }
+
+    // Enter edit mode and add checkbox/delete button to cards
+    function enterEditMode() {
+      if (isEditMode) return;
+      isEditMode = true;
+      renderParties();
+      updateHeaderState();
+    }
+
+    // Exit edit mode and remove checkbox/delete button from cards
+    function exitEditMode() {
+      isEditMode = false;
+      selectedPartyIds.clear();
+      selectAll = false;
+      renderParties();
+      updateHeaderState();
+    }
+
+    // Add checkbox and delete button to existing card
+    function addEditModeControls(card, partyId) {
+      // Add checkbox
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'party-card__checkbox';
+      checkbox.dataset.partyId = partyId;
+      if (selectedPartyIds.has(partyId)) {
+        checkbox.checked = true;
+      }
       checkbox.addEventListener('change', (e) => {
         if (e.target.checked) {
-          selectedPartyIds.add(party.id);
+          selectedPartyIds.add(partyId);
         } else {
-          selectedPartyIds.delete(party.id);
+          selectedPartyIds.delete(partyId);
         }
         updateHeaderState();
       });
+      card.insertBefore(checkbox, card.firstChild);
 
-      // Add delete button handler (only in edit mode)
-      if (isEditMode) {
-        const deleteBtn = card.querySelector('.party-card__delete');
-        deleteBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openDeleteModal(party);
-        });
-      }
+      // Add delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'party-card__delete';
+      deleteBtn.type = 'button';
+      deleteBtn.ariaLabel = 'Delete party';
+      deleteBtn.textContent = '✕';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDeleteModal(partyId);
+      });
+      card.appendChild(deleteBtn);
 
-      return card;
+      return { checkbox, deleteBtn };
     }
 
     // Long-press handler
@@ -549,7 +561,7 @@
         // Add delete button
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
-        deleteBtn.className = 'btn btn--danger page-content__delete-btn';
+        deleteBtn.className = 'btn btn--danger';
         deleteBtn.textContent = `Delete ${selectedPartyIds.size} Party${selectedPartyIds.size > 1 ? 's' : ''}`;
         deleteBtn.disabled = selectedPartyIds.size === 0;
         deleteBtn.addEventListener('click', () => openDeleteModal());
