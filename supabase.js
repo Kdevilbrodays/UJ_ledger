@@ -299,12 +299,13 @@ async function getDataCounts(db) {
 
 async function exportAllData(db) {
   const parties = await getAllParties(db);
-  const transactions = [];
-  for (const p of parties) {
-    const txns = await getTransactions(db, p.id);
-    transactions.push(...txns);
-  }
-  return { exported_at: new Date().toISOString(), parties, transactions };
+  // Fetch all transactions in a single batch instead of N queries
+  const partyIds = parties.map(p => p.id);
+  const { data: allTransactions } = await db
+    .from('transactions')
+    .select('*')
+    .in('party_id', partyIds);
+  return { exported_at: new Date().toISOString(), parties, transactions: allTransactions || [] };
 }
 
 // Counts what's in a parsed backup file without writing anything, so the
