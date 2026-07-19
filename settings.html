@@ -150,7 +150,7 @@
     }
 
     async function renderConnectionStatus() {
-      const isDemo = CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_ANON_KEY.includes('your-anon');
+      const isDemo = CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_PUBLISHABLE_KEY.includes('your-publishable');
       document.getElementById('connection-status').textContent = isDemo
         ? 'Demo mode (data stored on this device only)'
         : 'Connected to Supabase';

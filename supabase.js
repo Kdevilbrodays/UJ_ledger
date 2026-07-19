@@ -1,13 +1,13 @@
 function initSupabase() {
   // If using placeholder config, use demo mode with localStorage
-  if (CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_ANON_KEY.includes('your-anon')) {
+  if (CONFIG.SUPABASE_URL.includes('your-project-id') || CONFIG.SUPABASE_PUBLISHABLE_KEY.includes('your-publishable')) {
     return createDemoDb();
   }
-  
+
   if (typeof supabase === 'undefined') {
     throw new Error('Supabase CDN script must be loaded before supabase.js');
   }
-  return supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  return supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_PUBLISHABLE_KEY);
 }
 
 // Demo database using localStorage

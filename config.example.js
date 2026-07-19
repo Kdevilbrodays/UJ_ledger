@@ -4,5 +4,5 @@
 const CONFIG = {
   GEMINI_API_KEY: "your-gemini-api-key-here",
   SUPABASE_URL: "https://your-project-id.supabase.co",
-  SUPABASE_ANON_KEY: "your-anon-public-key-here"
+  SUPABASE_PUBLISHABLE_KEY: "your-publishable-public-key-here"
 };
