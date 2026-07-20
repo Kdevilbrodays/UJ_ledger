@@ -217,6 +217,8 @@
   color: var(--color-accent-strong);
   border: 0;
   font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
 }
 
 .card-list {
@@ -504,6 +506,8 @@
 .toast--visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+  /* clickable when visible so the Undo button works */
+  pointer-events: auto;
 }
 
 /* Loading state: shimmer + status text shown while a page-local task (e.g.
