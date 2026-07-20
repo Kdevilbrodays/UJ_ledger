@@ -448,6 +448,9 @@
       }
     }
 
+    // Expose flushPendingDeletes globally so app.js can invoke it before navigation.
+    window.flushPendingDeletes = flushPendingDeletes;
+
     // Delegated long-press + click/keyboard handling for party list
     function attachLongPress(listEl) {
       if (!listEl) return;
