@@ -64,8 +64,3 @@ Transaction flow when adding a Jama/Udhar:
    - Updates party's `current_balance`
    - Updates `last_activity`
    - Returns new balance
-
-## Git Workflow
-
-- **Always push to main branch**: All changes should be committed to and pushed to the main branch. Never push to other branches without explicit confirmation.
-- **Commit message style**: Be concise (1-2 sentences), explain the "why" rather than just the "what". Use present tense verbs.

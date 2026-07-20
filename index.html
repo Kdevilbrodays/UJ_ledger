@@ -60,11 +60,6 @@
 
   <div class="page-shell page-shell--with-fab">
     <div class="page-content">
-      <!-- Header with Title and Actions -->
-      <div class="page-content__header">
-        <h1 class="page-content__title">All Parties</h1>
-      </div>
-
       <!-- Search + Balance Filter -->
       <div class="filter-bar">
         <div class="filter-bar__field filter-bar__field--search">
@@ -145,20 +140,6 @@
     </div>
   </div>
 
-  <!-- Modal for Deleting Parties -->
-  <div id="modal-delete-parties" class="modal-overlay" hidden>
-    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="delete-parties-modal-title">
-      <h2 class="modal__title" id="delete-parties-modal-title">Delete Selected Parties</h2>
-      <div class="modal__body">
-        <p id="delete-parties-warning" class="modal__text"></p>
-      </div>
-      <div class="modal__actions">
-        <button type="button" class="btn btn--secondary" id="btn-cancel-delete-parties">Cancel</button>
-        <button type="button" class="btn btn--danger" id="btn-confirm-delete-parties">Delete</button>
-      </div>
-    </div>
-  </div>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.4.1"></script>
   <script src="config.js"></script>
@@ -170,9 +151,6 @@
     let subscription;
     let currentSearchQuery = '';
     let currentBalanceFilter = 'all';
-    let isEditMode = false;
-    let selectedPartyIds = new Set();
-    let selectAll = false;
 
     // Initialize
     async function init() {
@@ -244,23 +222,15 @@
         filtered.forEach(party => {
           const card = createPartyCard(party);
           listEl.appendChild(card);
-          // Add edit mode controls if in edit mode
-          if (isEditMode) {
-            addEditModeControls(card, party.id);
-          }
         });
       }
     }
 
     // Create party card element
     function createPartyCard(party) {
-      const card = document.createElement(isEditMode ? 'div' : 'a');
+      const card = document.createElement('a');
+      card.href = `party.html?id=${party.id}`;
       card.className = 'card party-card';
-      card.dataset.partyId = party.id;
-
-      if (!isEditMode) {
-        card.href = `party.html?id=${party.id}`;
-      }
 
       const balance = party.current_balance || 0;
       const balanceClass = balance > 0 ? 'party-card__balance--positive' :
@@ -296,97 +266,7 @@
 
       card.append(infoDiv, balanceDiv);
 
-      // Add long-press listener
-      addLongPressHandler(card, party);
-
       return card;
-    }
-
-    // Enter edit mode and add checkbox/delete button to cards
-    function enterEditMode() {
-      if (isEditMode) return;
-      isEditMode = true;
-      renderParties();
-      updateHeaderState();
-    }
-
-    // Exit edit mode and remove checkbox/delete button from cards
-    function exitEditMode() {
-      isEditMode = false;
-      selectedPartyIds.clear();
-      selectAll = false;
-      renderParties();
-      updateHeaderState();
-    }
-
-    // Add checkbox and delete button to existing card
-    function addEditModeControls(card, partyId) {
-      // Remove any existing controls on the card
-      const existingCheckbox = card.querySelector('.party-card__checkbox');
-      const existingDeleteBtn = card.querySelector('.party-card__delete');
-      if (existingCheckbox) existingCheckbox.remove();
-      if (existingDeleteBtn) existingDeleteBtn.remove();
-
-      // Create checkbox
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'party-card__checkbox';
-      checkbox.checked = selectedPartyIds.has(partyId);
-
-      // Add checkbox click handler
-      checkbox.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent card click
-        if (e.target.checked) {
-          selectedPartyIds.add(partyId);
-        } else {
-          selectedPartyIds.delete(partyId);
-        }
-        updateHeaderState();
-      });
-      card.insertBefore(checkbox, card.firstChild);
-
-      // Create delete button
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'party-card__delete';
-      deleteBtn.type = 'button';
-      deleteBtn.ariaLabel = 'Delete party';
-      deleteBtn.textContent = '✕';
-
-      // Add delete button click handler
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent card click
-        openDeleteModal(partyId);
-      });
-      card.appendChild(deleteBtn);
-    }
-
-    // Long-press handler
-    function addLongPressHandler(card, party) {
-      let pressTimer;
-
-      const startPress = (e) => {
-        // Prevent context menu from appearing
-        e.preventDefault();
-        e.stopPropagation();
-
-        pressTimer = setTimeout(() => {
-          enterEditMode();
-        }, 500);
-      };
-
-      const endPress = (e) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
-      };
-
-      card.addEventListener('touchstart', startPress, { passive: false });
-      card.addEventListener('touchend', endPress);
-      card.addEventListener('touchcancel', endPress);
-      card.addEventListener('mousedown', startPress, { passive: false });
-      card.addEventListener('mouseup', endPress);
-      card.addEventListener('mouseleave', endPress);
     }
 
     // Setup event listeners
@@ -441,67 +321,6 @@
       document.getElementById('btn-scan-diary').addEventListener('click', () => {
         window.location.href = 'scan.html';
       });
-
-      // Delete modal buttons
-      document.getElementById('btn-cancel-delete-parties').addEventListener('click', () => {
-        closeModal(document.getElementById('modal-delete-parties'));
-      });
-
-      document.getElementById('btn-confirm-delete-parties').addEventListener('click', async () => {
-        try {
-          showLoading('Deleting parties…');
-          const deletePromises = Array.from(selectedPartyIds).map(id =>
-            deleteParty(db, id)
-          );
-          await Promise.all(deletePromises);
-          hideLoading();
-          closeModal(document.getElementById('modal-delete-parties'));
-          exitEditMode();
-          await loadParties();
-          showToast('Parties deleted successfully');
-        } catch (err) {
-          hideLoading();
-          showError('Failed to delete parties: ' + err.message);
-        }
-      });
-
-      // Click outside to exit edit mode
-      document.addEventListener('click', (e) => {
-        if (isEditMode) {
-          const partyCards = document.querySelectorAll('.party-card');
-          let clickedOutside = true;
-          partyCards.forEach(card => {
-            if (card.contains(e.target)) {
-              clickedOutside = false;
-            }
-          });
-          if (clickedOutside) {
-            exitEditMode();
-          }
-        }
-      });
-
-      // Escape key to exit edit mode
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && isEditMode) {
-          exitEditMode();
-        }
-      });
-
-      // Select All checkbox
-      const selectAllCheckbox = document.getElementById('select-all');
-      if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', (e) => {
-          selectAll = e.target.checked;
-          selectedPartyIds.clear();
-          if (selectAll) {
-            filtered.forEach(party => {
-              selectedPartyIds.add(party.id);
-            });
-          }
-          renderParties();
-        });
-      }
     }
 
     // Setup real-time subscription
@@ -509,91 +328,6 @@
       subscription = subscribeToParties(db, () => {
         loadParties();
       });
-    }
-
-    // Enter edit mode
-    function enterEditMode() {
-      isEditMode = true;
-      renderParties();
-      updateHeaderState();
-    }
-
-    // Exit edit mode
-    function exitEditMode() {
-      isEditMode = false;
-      selectedPartyIds.clear();
-      selectAll = false;
-      renderParties();
-      updateHeaderState();
-    }
-
-    // Update header state based on edit mode and selections
-    function updateHeaderState() {
-      const header = document.querySelector('.page-content');
-      if (isEditMode) {
-        header.classList.add('page-content--edit-mode');
-      } else {
-        header.classList.remove('page-content--edit-mode');
-      }
-
-      // Update header text
-      const titleEl = document.querySelector('.page-content__title');
-      if (isEditMode) {
-        titleEl.textContent = 'Delete Parties';
-      } else {
-        titleEl.textContent = 'All Parties';
-      }
-
-      // Add header actions if in edit mode
-      let actionsEl = document.querySelector('.page-content__actions');
-      if (isEditMode) {
-        if (!actionsEl) {
-          actionsEl = document.createElement('div');
-          actionsEl.className = 'page-content__actions';
-          header.appendChild(actionsEl);
-        }
-
-        // Add select all checkbox
-        const selectAllWrapper = document.createElement('div');
-        selectAllWrapper.className = 'page-content__select-all';
-
-        const selectAll = document.createElement('input');
-        selectAll.type = 'checkbox';
-        selectAll.id = 'select-all';
-        selectAll.className = 'form-checkbox select-all__checkbox';
-        selectAll.checked = selectAll;
-
-        const selectAllLabel = document.createElement('label');
-        selectAllLabel.className = 'select-all__label';
-        selectAllLabel.htmlFor = 'select-all';
-        selectAllLabel.textContent = `Select All (${filtered.length})`;
-
-        selectAllWrapper.append(selectAll, selectAllLabel);
-
-        // Add delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'btn btn--danger';
-        deleteBtn.textContent = `Delete ${selectedPartyIds.size} Party${selectedPartyIds.size > 1 ? 's' : ''}`;
-        deleteBtn.disabled = selectedPartyIds.size === 0;
-        deleteBtn.addEventListener('click', () => openDeleteModal());
-
-        actionsEl.innerHTML = '';
-        actionsEl.append(selectAllWrapper, deleteBtn);
-      } else if (actionsEl) {
-        actionsEl.remove();
-      }
-    }
-
-    // Open delete modal
-    function openDeleteModal() {
-      const modal = document.getElementById('modal-delete-parties');
-      const warningEl = document.getElementById('delete-parties-warning');
-      const deleteBtn = document.getElementById('btn-confirm-delete-parties');
-
-      warningEl.textContent = `This will permanently delete ${selectedPartyIds.size} party${selectedPartyIds.size > 1 ? 's' : ''} and all their transactions. This cannot be undone.`;
-      deleteBtn.textContent = `Delete ${selectedPartyIds.size} Party${selectedPartyIds.size > 1 ? 's' : ''}`;
-      openModal(modal);
     }
 
     // Initialize on page load
