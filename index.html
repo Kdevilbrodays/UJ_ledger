@@ -282,6 +282,7 @@
         delBtn.setAttribute('aria-label', `Delete ${party.name}`);
         delBtn.dataset.partyId = party.id;
         delBtn.title = 'Delete';
+        delBtn.textContent = '🗑️';
         card.append(infoDiv, delBtn);
       } else {
         const balanceDiv = document.createElement('div');
