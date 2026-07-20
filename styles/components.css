@@ -165,6 +165,60 @@
 .party-card__balance--negative { color: var(--color-jama-text); }
 .party-card__balance--zero     { color: var(--color-ink-muted); }
 
+/* Delete-mode styles */
+.is-delete-mode .nav-trigger,
+.is-delete-mode #search-trigger,
+.is-delete-mode #btn-add-party,
+.is-delete-mode .filter-bar,
+.is-delete-mode .fab-bar {
+  display: none !important;
+}
+
+.is-delete-mode .app-header__title {
+  text-align: center;
+}
+
+.app-header__exit {
+  display: none;
+}
+
+.is-delete-mode .app-header__exit {
+  display: inline-flex;
+}
+
+.party-card__delete-btn {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--color-danger);
+  color: var(--color-surface);
+  border: none;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.party-card--hidden {
+  opacity: 0;
+  transform: scaleY(0);
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transition: opacity 0.18s ease, transform 0.18s ease, height 0.18s ease;
+}
+
+/* Actionable toast button */
+.toast__msg { margin-right: 12px; }
+.toast__action {
+  background: transparent;
+  color: var(--color-accent-strong);
+  border: 0;
+  font-weight: 600;
+}
+
 .card-list {
   display: flex;
   flex-direction: column;

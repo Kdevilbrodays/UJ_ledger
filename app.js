@@ -111,6 +111,50 @@ function showToast(message, options = {}) {
   }, duration);
 }
 
+// Actionable Undo toast: shows a message with an "Undo" button.
+// Keeps `showToast` unchanged for plain textual toasts elsewhere.
+function showUndoToast(message, onUndo, options = {}) {
+  const duration = options.duration || 4500;
+
+  let toast = document.getElementById('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.className = 'toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toast);
+  }
+
+  clearTimeout(toastHideTimeout);
+
+  // Build actionable content
+  toast.innerHTML = '';
+  const span = document.createElement('span');
+  span.className = 'toast__msg';
+  span.textContent = message;
+  const btn = document.createElement('button');
+  btn.className = 'toast__action';
+  btn.type = 'button';
+  btn.textContent = 'Undo';
+  btn.addEventListener('click', () => {
+    try { onUndo && onUndo(); } catch (e) { console.error(e); }
+    toast.classList.remove('toast--visible');
+  });
+
+  toast.appendChild(span);
+  toast.appendChild(btn);
+
+  // Show
+  toast.classList.remove('toast--visible');
+  void toast.offsetWidth;
+  toast.classList.add('toast--visible');
+
+  toastHideTimeout = setTimeout(() => {
+    toast.classList.remove('toast--visible');
+  }, duration);
+}
+
 // --- Shared modal helpers -------------------------------------------------
 // Used by the nav drawer and by every task modal (Add Party, Add Jama, Add
 // Udhar, Delete confirmations, etc). One implementation of focus trapping,
@@ -227,15 +271,19 @@ function initNavDrawer(db, currentPage) {
     }
 
     if (link.textContent.trim().startsWith('➕')) {
-      link.addEventListener('click', (event) => {
-        event.preventDefault();
-        closeNavDrawer();
-        window.location.href = 'index.html?action=add-party';
-      });
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeNavDrawer();
+          // Flush any pending deletes before leaving the page
+          try { window.flushPendingDeletes && window.flushPendingDeletes(); } catch (e) {}
+          window.location.href = 'index.html?action=add-party';
+        });
     } else {
-      link.addEventListener('click', () => {
-        closeNavDrawer();
-      });
+        link.addEventListener('click', () => {
+          // For links that navigate away (scan/settings), try flushing pending deletes
+          try { window.flushPendingDeletes && window.flushPendingDeletes(); } catch (e) {}
+          closeNavDrawer();
+        });
     }
   });
 }
@@ -272,6 +320,7 @@ function initPartySearch(db) {
   document.getElementById('nav-drawer-search-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     closeNavDrawer();
+    try { window.flushPendingDeletes && window.flushPendingDeletes(); } catch (err) {}
     launchPartySearch(db);
   });
   document.getElementById('party-search-close')?.addEventListener('click', () => {

@@ -54,6 +54,7 @@
   <header class="app-header">
     <button class="icon-btn nav-trigger" id="nav-trigger" aria-label="Open menu">☰</button>
     <div class="app-header__title">Udhar Ledger</div>
+    <button class="icon-btn app-header__exit" id="btn-exit-delete-mode" aria-label="Exit delete mode" hidden>✕</button>
     <button class="icon-btn" id="search-trigger" aria-label="Find a party">🔍</button>
     <button class="btn btn--primary app-header__action" id="btn-add-party">+ Add</button>
   </header>
@@ -151,6 +152,10 @@
     let subscription;
     let currentSearchQuery = '';
     let currentBalanceFilter = 'all';
+    // Delete-mode state
+    let isDeleteMode = false;
+    const pendingDeleteIds = new Set(); // ids currently awaiting commit
+    const pendingDeletes = new Map(); // id -> { timerId, party }
 
     // Initialize
     async function init() {
@@ -160,6 +165,7 @@
         initNavDrawer(db, 'index');
         initPartySearch(db);
         setupEventListeners();
+        attachLongPress(document.getElementById('parties-list'));
         setupRealtimeSubscription();
         if (getParam('action') === 'add-party') {
           openModal(document.getElementById('modal-add-party'));
@@ -203,9 +209,16 @@
         return true;
       });
 
+      // Never render parties currently pending deletion
+      filtered = filtered.filter(p => !pendingDeleteIds.has(p.id));
+
       listEl.innerHTML = '';
 
       if (filtered.length === 0) {
+        // If every party is pending-delete, exit delete mode and fall through
+        if (allParties.length > 0 && pendingDeleteIds.size >= allParties.length) {
+          exitDeleteMode();
+        }
         if (currentSearchQuery.trim() || currentBalanceFilter !== 'all') {
           emptyNoPartiesEl.hidden = true;
           emptyNoSearchEl.hidden = false;
@@ -228,8 +241,10 @@
 
     // Create party card element
     function createPartyCard(party) {
-      const card = document.createElement('a');
-      card.href = `party.html?id=${party.id}`;
+      const card = document.createElement('div');
+      card.dataset.partyId = party.id;
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
       card.className = 'card party-card';
 
       const balance = party.current_balance || 0;
@@ -260,21 +275,27 @@
 
       infoDiv.append(nameDiv, metaDiv);
 
-      const balanceDiv = document.createElement('div');
-      balanceDiv.className = `party-card__balance ${balanceClass}`;
-      balanceDiv.textContent = formatCurrency(balance);
-
-      card.append(infoDiv, balanceDiv);
+      // When in delete mode, show delete button in place of balance
+      if (isDeleteMode) {
+        const delBtn = document.createElement('button');
+        delBtn.className = 'party-card__delete-btn';
+        delBtn.setAttribute('aria-label', `Delete ${party.name}`);
+        delBtn.dataset.partyId = party.id;
+        delBtn.title = 'Delete';
+        card.append(infoDiv, delBtn);
+      } else {
+        const balanceDiv = document.createElement('div');
+        balanceDiv.className = `party-card__balance ${balanceClass}`;
+        balanceDiv.textContent = formatCurrency(balance);
+        card.append(infoDiv, balanceDiv);
+      }
 
       return card;
     }
 
     // Setup event listeners
     function setupEventListeners() {
-      // Add party button
-      document.getElementById('btn-add-party').addEventListener('click', () => {
-        openModal(document.getElementById('modal-add-party'));
-      });
+      // Add party button (handled below with flushPendingDeletes)
 
       // Cancel add party modal
       document.getElementById('btn-cancel-add-party').addEventListener('click', () => {
@@ -319,7 +340,14 @@
 
       // Scan diary button
       document.getElementById('btn-scan-diary').addEventListener('click', () => {
+        flushPendingDeletes();
         window.location.href = 'scan.html';
+      });
+
+      // Add party button
+      document.getElementById('btn-add-party').addEventListener('click', () => {
+        flushPendingDeletes();
+        openModal(document.getElementById('modal-add-party'));
       });
     }
 
@@ -329,6 +357,183 @@
         loadParties();
       });
     }
+
+    // --- Delete-mode helpers -------------------------------------------------
+    function enterDeleteMode() {
+      if (isDeleteMode) return;
+      isDeleteMode = true;
+      document.body.classList.add('is-delete-mode');
+      document.querySelector('.app-header__title').textContent = 'Tap 🗑️ to delete a party.';
+      const exitBtn = document.getElementById('btn-exit-delete-mode');
+      if (exitBtn) exitBtn.hidden = false;
+      // push a history state so the back button can exit delete mode
+      history.pushState({ ujDeleteMode: true }, '', location.href);
+      showToast('Tap 🗑️ to delete a party. Go back to exit.');
+      renderParties();
+    }
+
+    function exitDeleteMode() {
+      if (!isDeleteMode) return;
+      isDeleteMode = false;
+      document.body.classList.remove('is-delete-mode');
+      document.querySelector('.app-header__title').textContent = 'Udhar Ledger';
+      const exitBtn = document.getElementById('btn-exit-delete-mode');
+      if (exitBtn) exitBtn.hidden = true;
+      renderParties();
+    }
+
+    // Commit delete immediately (called after grace timer expires or from flush)
+    async function commitDelete(id) {
+      const info = pendingDeletes.get(id);
+      if (!info) return;
+      pendingDeletes.delete(id);
+      // attempt server delete
+      try {
+        await deleteParty(db, id);
+        pendingDeleteIds.delete(id);
+      } catch (err) {
+        // restore the party in UI
+        pendingDeleteIds.delete(id);
+        if (info.party) {
+          allParties.push(info.party);
+          // re-sort by last_activity descending similar to load
+          allParties.sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0));
+        }
+        renderParties();
+        showError(`Failed to delete ${info.party?.name || ''}. It has been restored.`);
+      }
+    }
+
+    function scheduleDelete(party) {
+      const id = party.id;
+      if (pendingDeleteIds.has(id)) return;
+      pendingDeleteIds.add(id);
+
+      // visually hide the card with a short collapse; removal from DOM after animation
+      const cardEl = document.querySelector(`[data-party-id="${id}"]`);
+      if (cardEl) {
+        cardEl.classList.add('party-card--hidden');
+        setTimeout(() => {
+          cardEl.remove();
+        }, 180);
+      }
+
+      const timerId = setTimeout(() => {
+        commitDelete(id);
+      }, 4500);
+
+      pendingDeletes.set(id, { timerId, party });
+
+      // Show undo toast for this deletion. Only one visible at a time (intentional).
+      showUndoToast(`Deleted ${party.name}`, () => {
+        const info = pendingDeletes.get(id);
+        if (!info) return;
+        clearTimeout(info.timerId);
+        pendingDeletes.delete(id);
+        pendingDeleteIds.delete(id);
+        // restore party to list
+        allParties.push(info.party);
+        allParties.sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0));
+        renderParties();
+      });
+    }
+
+    function flushPendingDeletes() {
+      // Immediately commit all pending deletes (cancel their grace timers)
+      for (const [id, info] of Array.from(pendingDeletes.entries())) {
+        clearTimeout(info.timerId);
+        // fire commit without delay
+        commitDelete(id);
+      }
+    }
+
+    // Delegated long-press + click/keyboard handling for party list
+    function attachLongPress(listEl) {
+      if (!listEl) return;
+      let timer = null;
+      let startX = 0;
+      let startY = 0;
+      let startTarget = null;
+      let longFired = false;
+
+      listEl.addEventListener('pointerdown', (e) => {
+        if (e.button && e.button !== 0) return;
+        startX = e.clientX;
+        startY = e.clientY;
+        startTarget = e.target.closest('.party-card');
+        longFired = false;
+
+        timer = setTimeout(() => {
+          // Don't enter delete mode if press started on a delete button itself
+          if (!startTarget) return;
+          if (startTarget.querySelector('.party-card__delete-btn')?.contains(e.target)) return;
+          enterDeleteMode();
+          longFired = true;
+          navigator.vibrate?.(15);
+        }, 500);
+      }, { passive: true });
+
+      listEl.addEventListener('pointermove', (e) => {
+        if (!timer) return;
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) > 10) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      }, { passive: true });
+
+      listEl.addEventListener('pointerup', (e) => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (longFired) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      });
+
+      // Click delegation
+      listEl.addEventListener('click', (e) => {
+        const del = e.target.closest('.party-card__delete-btn');
+        if (del) {
+          const id = del.dataset.partyId;
+          const party = allParties.find(p => p.id === id) || (pendingDeletes.get(id) && pendingDeletes.get(id).party);
+          if (party) scheduleDelete(party);
+          return;
+        }
+
+        const card = e.target.closest('.party-card');
+        if (!card) return;
+        const id = card.dataset.partyId;
+        if (isDeleteMode) return; // inert while in delete mode
+        flushPendingDeletes();
+        window.location.href = `party.html?id=${id}`;
+      });
+
+      // Keyboard support: Enter/Space to navigate when not in delete mode
+      listEl.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const card = e.target.closest('.party-card');
+        if (!card) return;
+        const id = card.dataset.partyId;
+        if (isDeleteMode) return;
+        flushPendingDeletes();
+        window.location.href = `party.html?id=${id}`;
+      });
+    }
+
+    // Back button handling: if in delete mode, popstate should exit it
+    window.addEventListener('popstate', (e) => {
+      if (isDeleteMode) {
+        exitDeleteMode();
+      }
+    });
+
+    // Wire explicit exit button
+    document.addEventListener('DOMContentLoaded', () => {
+      const exitBtn = document.getElementById('btn-exit-delete-mode');
+      exitBtn?.addEventListener('click', () => exitDeleteMode());
+    });
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', init);
